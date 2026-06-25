@@ -1,4 +1,54 @@
-# ZATCA Open Specification — Project Map
+# ZATCA Open Platform — Project Map
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                   zatca-open-specification                       │
+│              YAML — Single Source of Truth (20 files)            │
+│  models/  rules/  security/  lifecycle/  contracts/  errors/     │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ reads at startup
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                     zatca-core-engine                            │
+│              Node.js Express REST microservice                   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│  │ Validation│  │  Crypto  │  │ Pipeline │  │Client to │        │
+│  │  Engine   │  │ Signature│  │ Validate→│  │ Emulator │        │
+│  │ (48 rules)│  │  + QR    │  │ Sign→QR  │  │ / ZATCA  │        │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘        │
+│  Endpoints: /health /api/v1/{validate,sign,qr,process,          │
+│  full-process,submit/compliance,submit/clearance,               │
+│  submit/reporting,submit/production-csid,spec/*}                │
+└──────────┬──────────────────────────────────────────────────────┘
+           │ HTTP (port 3001)
+           ▼
+┌──────────────────────┐     ┌──────────────────────────┐
+│  zatca-emulator      │     │  ZATCA Government API    │
+│  (sandbox :8080)     │     │  (production)            │
+│  POST /compliance    │     │  POST /compliance        │
+│  POST /production/csids│   │  POST /production/csids  │
+│  POST /clearance/inv.│     │  POST /clearance/invoices│
+│  POST /reporting/inv.│     │  POST /reporting/invoices│
+│  GET /certificates   │     │  GET /certificates       │
+└──────────────────────┘     └──────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                  Per-Language Thin SDKs                          │
+│  ┌─────────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │ Laravel SDK │  │ Django   │  │ .NET     │  │ Node.js  │     │
+│  │ (✅ Done)   │  │(⏳ Pending)│  │(⏳ Pending)│  │(⏳ Pending)│  │
+│  │ 4 source    │  │          │  │          │  │          │     │
+│  │ files,      │  │          │  │          │  │          │     │
+│  │ cURL client │  │          │  │          │  │          │     │
+│  └─────────────┘  └──────────┘  └──────────┘  └──────────┘     │
+└──────────────────────────────────────────────────────────────────┘
+
+                        zatca-compliance-test-suite
+                 101 test cases (YAML) + expected results (JSON)
+```
 
 ## TECH_STACK
 
@@ -10,9 +60,12 @@
 | **Encryption** | ECDSA secp256k1 + SHA-256 | — |
 | **QR Encoding** | TLV Base64 (GS1-compatible) | — |
 | **ZATCA API** | FATOORA API | V2 (2024+) |
-| **Reference SDK** | Laravel (`aghfatehi/laravel-zatca`) | v1.1.0 |
-| **Target SDKs** | Laravel, Django, .NET, Node.js | — |
+| **Core Engine** | Node.js + Express | 22+ |
+| **Emulator** | Node.js + Express | 22+ |
+| **Reference SDK** | Laravel (`zatca-platform/zatca-laravel-sdk`) | v1.0 |
+| **Target SDKs** | Laravel ✅, Django ⏳, .NET ⏳, Node.js ⏳ |
 | **Certificate** | X.509 v3 | — |
+| **Test Suite** | YAML + JSON deterministic tests | 101 cases |
 
 ## SYSTEM_FLOW
 
@@ -23,117 +76,97 @@ Phase 1 (Generation):
     → Base64
     → QR Image
 
-Phase 2 (Integration) — Simplified:
+Phase 2 (Onboarding):
+  CSR + OTP
+    → POST /api/v1/submit/compliance
+    → Compliance CSID (certificate + secret)
+    → POST /api/v1/submit/production-csid
+    → Production CSID
+
+Phase 2 (Full Process — Simplified):
   Invoice Data (full)
-    → Validation (48 rules)
-    → UBL 2.1 XML
-    → C14N Exclusive
-    → SHA-256 Hash
-    → ECDSA Signature
-    → XAdES EPES Envelope
-    → TLV QR (Tags 1-9)
-    → POST /invoices/reporting/single
-    → ZATCA Acknowledges
+    → Validate (48 YAML rules)
+    → Sign (ECDSA secp256k1)
+    → QR (TLV tags 1-9)
+    → POST /api/v1/submit/reporting
     → State: Reported
 
-Phase 2 (Integration) — Standard:
-  [Same steps as Simplified until XAdES]
-    → POST /invoices/clearance/single
-    → ZATCA Validates & Stamps
-    → Cryptographic Stamp Returned
+Phase 2 (Full Process — Standard):
+  Invoice Data (full)
+    → Validate (48 YAML rules)
+    → Sign (ECDSA secp256k1)
+    → QR (TLV tags 1-9)
+    → POST /api/v1/submit/clearance
     → State: Cleared
-
-Offline Mode:
-  [Sign → Store → Queue → Sync Later]
 ```
 
-## ARCHITECTURE
+## SPECIFICATION (zatca-open-spec — 20 YAML files)
 
 ```
-/zatca-open-spec/           # ← YOU ARE HERE (Source of Truth)
+spec/
 ├── contracts/              # API contracts (onboarding, clearance, reporting, compliance)
 ├── models/                 # Domain models (invoice, party, line-item, tax)
-├── rules/                  # Validation engine (48 rules across 8 categories)
+├── rules/                  # Validation rules (48 rules across schema, business, tax, crypto, sequence)
 ├── security/               # Crypto specs (QR TLV, ECDSA signing, X.509 certs)
 ├── lifecycle/              # State machine (7 states, 12 transitions, 6 events)
 ├── errors/                 # Standard error codes (35 codes, 8 categories)
 └── examples/               # Complete YAML examples (4 invoice types)
+```
 
 Design Principles:
-  - Implementation-agnostic (zero code)
-  - Deterministic & testable
-  - Single source of truth for all SDKs
-  - Domain-driven (feature boundaries, not file boundaries)
-  - Simplicity First — no abstraction before repetition
-```
+- Implementation-agnostic (zero code — pure YAML)
+- Deterministic & testable
+- Single source of truth for all SDKs
+- Domain-driven (feature boundaries, not file boundaries)
+- Simplicity First — no abstraction before repetition
 
-## ORPHANS & PENDING
+## MILESTONES
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Invoice Model (invoice.yaml) | Done | Full model w/ sub_types |
-| Party Model (party.yaml) | Done | Seller, buyer, address, contact |
-| Validation Rules (validation-rules.yaml) | Done | 48 rules: schema, business, crypto, sequence |
-| QR Spec (qr-spec.yaml) | Done | Phase 1 (5 tags) + Phase 2 (9 tags) |
-| Signature Spec (signature-spec.yaml) | Done | ECDSA + XAdES + hash chaining |
-| Certificate Spec (certificate-spec.yaml) | Done | CSR → Onboarding → CSID |
-| Lifecycle (lifecycle.yaml) | Done | 7 states, 12 transitions |
-| Events (events.yaml) | Done | 6 domain events |
-| API Contracts (contracts/*.yaml) | Done | Onboarding, clearance, reporting, compliance |
-| Error Codes (errors/error-codes.yaml) | Done | 35 standardized codes |
-| Line Item Model (models/line-item.yaml) | Done | Reference to invoice.yaml |
-| Tax Model (models/tax.yaml) | Done | KSA VAT categories & calc rules |
-| Schema Rules (rules/schema-rules.yaml) | Done | XML/UBL namespace & element rules |
-| Tax Rules (rules/tax-rules.yaml) | Done | KSA-specific tax formulas & exemptions |
-| Examples (examples/*.yaml) | Done | Simplified, standard, credit, debit |
-| SDK Implementations | PENDING | Plan: Laravel → Django → .NET → Node.js |
-| Integration Tests | Done | ../zatca-compliance-test-suite (separate repo) |
-| CI/CD Pipeline | PENDING | Plan: spec validation, YAML lint |
-| Localization (EN/AR) | PENDING | Plan: Arabic field descriptions |
-| UBL XSD Schemas | PENDING | Plan: reference schemas for validation |
-| Postman Collection | PENDING | Plan: API test suite |
+- [x] **M1**: Core Models + Validation (3 YAML files)
+- [x] **M2**: Security + Lifecycle (5 YAML files)
+- [x] **M3**: API Contracts + Errors (5 YAML files)
+- [x] **M4**: Examples + PROJECT_MAP + Support Models (7 YAML files)
+- [x] **M5**: Core Engine (Node.js REST microservice — validation, crypto, pipeline, FATOARA client)
+- [x] **M6**: Emulator (Node.js sandbox mimicking ZATCA government API)
+- [x] **M7**: Laravel SDK (thin HTTP client — Zatca.php, Manager, ServiceProvider, Facade)
+- [x] **M8**: Test Suite (101 deterministic test cases covering phases 1 & 2, including FATOARA APIs)
+- [ ] **M9**: Django SDK (thin Python HTTP client)
+- [ ] **M10**: .NET SDK (thin C# HTTP client)
+- [ ] **M11**: Node.js SDK (thin JavaScript HTTP client)
+- [ ] **M12**: CI/CD Pipeline (spec validation, YAML lint, integration tests)
+- [ ] **M13**: Docker Deployment (core-engine + emulator containers)
 
-## MILESTONES COMPLETED
-
-- [x] **M1**: Core Models + Validation (3 files)
-- [x] **M2**: Security + Lifecycle (5 files)
-- [x] **M3**: API Contracts + Errors (5 files)
-- [x] **M4**: Examples + PROJECT_MAP + Support Models (7 files)
-- [ ] **M5**: SDK Implementations (pending approval)
-- [ ] **M6**: Testing & CI (pending approval)
-
-## FILE INDEX
+## REPOSITORY STRUCTURE
 
 ```
-zatca-open-spec/
-├── contracts/
-│   ├── onboarding.yaml         # CSR submission & CSID issuance
-│   ├── clearance.yaml          # Standard invoice clearance
-│   ├── reporting.yaml          # Simplified invoice reporting
-│   └── compliance.yaml         # ZATCA validation response
-├── models/
-│   ├── invoice.yaml            # Full invoice domain model
-│   ├── party.yaml              # Party & address model
-│   ├── line-item.yaml          # Line item reference
-│   └── tax.yaml                # KSA VAT model
-├── rules/
-│   ├── validation-rules.yaml   # 48 validation rules (R-KSA + technical)
-│   ├── schema-rules.yaml       # UBL/XML schema compliance
-│   └── tax-rules.yaml          # Tax calculation formulas
-├── security/
-│   ├── qr-spec.yaml            # TLV QR code spec
-│   ├── signature-spec.yaml     # ECDSA + XAdES spec
-│   └── certificate-spec.yaml   # X.509 certificate lifecycle
-├── lifecycle/
-│   ├── lifecycle.yaml          # State machine (7 states, 12 transitions)
-│   └── events.yaml             # 6 domain events
-├── errors/
-│   └── error-codes.yaml        # 35 error codes
-└── examples/
-    ├── invoice-simplified.yaml # B2C retail example
-    ├── invoice-standard.yaml   # B2B IT services example
-    ├── credit-note.yaml        # Goods return example
-    └── debit-note.yaml         # Additional charges example
+ZATCA-open-Platform/           # Mono repo index (this repo)
+├── README.md                  # Repo overview & architecture
+├── PROJECT_MAP.md             # This file — project map & status
+└── zatca-open-spec/           # Git submodule to zatca-open-specification
+
+zatca-open-specification/      # Separate repo (github.com/zatca-platform/zatca-open-specification)
+zatca-core-engine/             # Separate repo (github.com/zatca-platform/zatca-core-engine)
+zatca-emulator/                # Separate repo (github.com/zatca-platform/zatca-emulator)
+zatca-laravel-sdk/             # Separate repo (github.com/zatca-platform/zatca-laravel-sdk)
+zatca-compliance-test-suite/   # Separate repo (github.com/zatca-platform/zatca-compliance-test-suite)
 ```
 
-Total: **20 files** across **7 directories**
+## COMPLETED WORK
+
+| Component | Repository | Files | Status |
+|-----------|-----------|-------|--------|
+| YAML Specification | zatca-open-specification | 20 YAML + PHP parser | ✅ Done |
+| Core Engine | zatca-core-engine | 8 source files (server, routes, validation, crypto, pipeline, client, specLoader) | ✅ Done |
+| Emulator | zatca-emulator | 6 route files + middleware + config + store | ✅ Done |
+| Laravel SDK | zatca-laravel-sdk | 4 Laravel source files | ✅ Done |
+| Test Suite | zatca-compliance-test-suite | 101 test cases (YAML + JSON) | ✅ Done |
+
+## PENDING
+
+| Component | Language | Status |
+|-----------|----------|--------|
+| Django SDK | Python | ⏳ Pending |
+| .NET SDK | C# | ⏳ Pending |
+| Node.js SDK | JavaScript | ⏳ Pending |
+| CI/CD Pipeline | — | ⏳ Pending |
+| Docker | — | ⏳ Pending |
