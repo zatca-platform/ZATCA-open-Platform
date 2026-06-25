@@ -1,0 +1,110 @@
+# ============================================================================
+# ZATCA Open Specification — XML Schema Compliance Rules
+# Version: 1.0.0
+# Standards: UBL 2.1, W3C XML Schema 1.0
+# ============================================================================
+# Rules for validating the invoice XML against the UBL 2.1 schema.
+# These are enforced by ZATCA's FATOORA platform during compliance check.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  standard: "UBL 2.1"
+  schema_location: "http://www.w3.org/2001/XMLSchema"
+
+# ---------------------------------------------------------------------------
+# XML Well-Formedness Rules
+# ---------------------------------------------------------------------------
+well_formedness:
+  rules:
+    - "Root element must be Invoice or CreditNote or DebitNote"
+    - "XML declaration (<?xml ... ?>) must be present"
+    - "All tags must be properly closed"
+    - "Tag names are case-sensitive"
+    - "Attribute values must be quoted"
+    - "Special characters must be escaped (&amp;, &lt;, &gt;, &quot;, &apos;)"
+    - "Proper UTF-8 encoding"
+
+# ---------------------------------------------------------------------------
+# UBL 2.1 Namespace Compliance
+# ---------------------------------------------------------------------------
+namespaces:
+  required:
+    - prefix: ""
+      uri: "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+      description: "Default UBL Invoice namespace"
+    - prefix: "cac"
+      uri: "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+      description: "Common Aggregate Components"
+    - prefix: "cbc"
+      uri: "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+      description: "Common Basic Components"
+    - prefix: "ext"
+      uri: "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+      description: "Common Extension Components"
+    - prefix: "sig"
+      uri: "urn:oasis:names:specification:ubl:schema:xsd:CommonSignatureComponents-2"
+      description: "Common Signature Components"
+    - prefix: "sac"
+      uri: "urn:oasis:names:specification:ubl:schema:xsd:SignatureAggregateComponents-2"
+      description: "Signature Aggregate Components"
+    - prefix: "sbc"
+      uri: "urn:oasis:names:specification:ubl:schema:xsd:SignatureBasicComponents-2"
+      description: "Signature Basic Components"
+    - prefix: "xades"
+      uri: "http://uri.etsi.org/01903/v1.3.2#"
+      description: "XAdES signature namespace"
+    - prefix: "ds"
+      uri: "http://www.w3.org/2000/09/xmldsig#"
+      description: "XML Digital Signature"
+
+# ---------------------------------------------------------------------------
+# Mandatory UBL 2.1 Elements Check
+# ---------------------------------------------------------------------------
+mandatory_elements:
+  invoice:
+    - "cbc:UBLVersionID"
+    - "cbc:CustomizationID"
+    - "cbc:ProfileID"
+    - "cbc:ID"
+    - "cbc:UUID"
+    - "cbc:IssueDate"
+    - "cbc:IssueTime"
+    - "cac:InvoicePeriod (conditional)"
+    - "cac:AccountingSupplierParty"
+    - "cac:AccountingCustomerParty"
+    - "cac:PaymentMeans (optional)"
+    - "cac:TaxTotal"
+    - "cac:LegalMonetaryTotal"
+    - "cac:InvoiceLine"
+
+  credit_note:
+    - "cbc:UBLVersionID"
+    - "cbc:CustomizationID"
+    - "cbc:ProfileID"
+    - "cbc:ID"
+    - "cbc:UUID"
+    - "cbc:IssueDate"
+    - "cbc:IssueTime"
+    - "cac:BillingReference"
+    - "cac:AccountingSupplierParty"
+    - "cac:AccountingCustomerParty"
+    - "cac:TaxTotal"
+    - "cac:LegalMonetaryTotal"
+    - "cac:CreditNoteLine"
+
+# ---------------------------------------------------------------------------
+# ZATCA Customization IDs
+# ---------------------------------------------------------------------------
+customization_ids:
+  invoice:
+    standard: "urn:cen.eu:en16931:2017#conformant#urn:zatca.gov.sa:e-invoicing:standard-invoice:1:0"
+    simplified: "urn:cen.eu:en16931:2017#conformant#urn:zatca.gov.sa:e-invoicing:simplified-invoice:1:0"
+
+  credit_note:
+    standard: "urn:cen.eu:en16931:2017#conformant#urn:zatca.gov.sa:e-invoicing:standard-creditnote:1:0"
+    simplified: "urn:cen.eu:en16931:2017#conformant#urn:zatca.gov.sa:e-invoicing:simplified-creditnote:1:0"
+
+  debit_note:
+    standard: "urn:cen.eu:en16931:2017#conformant#urn:zatca.gov.sa:e-invoicing:standard-debitnote:1:0"
+    simplified: "urn:cen.eu:en16931:2017#conformant#urn:zatca.gov.sa:e-invoicing:simplified-debitnote:1:0"

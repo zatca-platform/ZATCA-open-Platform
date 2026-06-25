@@ -1,0 +1,122 @@
+# ============================================================================
+# ZATCA Open Specification — Invoice Compliance Check API Contract
+# Version: 2.0.0
+# ============================================================================
+# Compliance check occurs when submitting to ZATCA (both clearance and
+# reporting paths). ZATCA validates the invoice against XML schema,
+# business rules, cryptographic integrity, and sequence integrity.
+# ============================================================================
+
+meta:
+  spec_version: "2.0.0"
+  api_version: "V2"
+  applies_to: ["all"]
+
+# ---------------------------------------------------------------------------
+# Compliance Validation Results
+# ---------------------------------------------------------------------------
+compliance_result:
+  description: "Standard response structure for ZATCA compliance validation"
+
+  fields:
+    - name: "status"
+      type: "string"
+      enum: ["PASS", "FAIL"]
+      description: "Overall compliance status"
+
+    - name: "requestID"
+      type: "string"
+      format: "uuid-v4"
+      description: "ZATCA unique request identifier"
+
+    - name: "validationResults"
+      type: "array"
+      item_type: "object"
+      description: "Detailed validation results per validation category"
+      items:
+        fields:
+          - name: "category"
+            type: "string"
+            enum: ["SCHEMA", "BUSINESS_RULES", "CRYPTOGRAPHIC", "SEQUENCE"]
+          - name: "status"
+            type: "string"
+            enum: ["PASS", "FAIL", "WARN"]
+          - name: "errors"
+            type: "array"
+            items:
+              fields:
+                - name: "code"
+                  type: "string"
+                - name: "message"
+                  type: "string"
+                - name: "details"
+                  type: "string"
+                  obligation: "optional"
+
+    - name: "warnings"
+      type: "array"
+      item_type: "object"
+      description: "Non-blocking warnings"
+      items:
+        fields:
+          - name: "code"
+            type: "string"
+          - name: "message"
+            type: "string"
+
+    - name: "clearedInvoice"
+      type: "string"
+      format: "Base64"
+      obligation: "conditional"
+      description: "Present only if status == PASS; contains the stamped XML"
+
+# ---------------------------------------------------------------------------
+# Compliance Check Flow
+# ---------------------------------------------------------------------------
+check_flow:
+  steps:
+    - step: 1
+      name: "Schema Validation"
+      checks:
+        - "XML well-formedness"
+        - "UBL 2.1 schema conformance"
+        - "Data type validation"
+
+    - step: 2
+      name: "Business Rules"
+      checks:
+        - "R-KSA-01 to R-KSA-15 compliance"
+        - "Mandatory field presence"
+        - "Monetary consistency"
+
+    - step: 3
+      name: "Cryptographic Verification"
+      checks:
+        - "Invoice hash integrity"
+        - "ECDSA signature verification"
+        - "Certificate validity (not expired, issued by ZATCA)"
+
+    - step: 4
+      name: "Sequence Verification"
+      checks:
+        - "Invoice counter monotonic"
+        - "Previous invoice hash match"
+        - "No duplicate UUID or invoice number"
+
+# ---------------------------------------------------------------------------
+# Response Handling
+# ---------------------------------------------------------------------------
+response_handling:
+  on_pass:
+    - "Extract clearedInvoice from response"
+    - "Decode Base64 to signed XML"
+    - "Extract cryptographic stamp"
+    - "Transition invoice to Cleared or Reported"
+    - "Fire InvoiceCleared / InvoiceReported event"
+
+  on_fail:
+    - "Parse error codes"
+    - "Categorize errors (business/technical/security)"
+    - "Transition invoice to Failed"
+    - "Fire InvoiceFailed event"
+    - "Log full error payload"

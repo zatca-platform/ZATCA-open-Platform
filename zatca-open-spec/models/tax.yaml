@@ -1,0 +1,80 @@
+# ============================================================================
+# ZATCA Open Specification — Tax Model
+# Version: 1.0.0
+# Standards: KSA VAT Law, ZATCA E-Invoice Data Dictionary
+# ============================================================================
+# Defines tax-related types used in ZATCA invoices.
+# Full type definitions are in invoice.yaml → sub_types.TaxTotal / TaxCategory.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  defined_in: "../models/invoice.yaml#/sub_types"
+
+# ---------------------------------------------------------------------------
+# VAT Categories (KSA)
+# ---------------------------------------------------------------------------
+vat_categories:
+  - code: "S"
+    name: "Standard Rate"
+    rate: 0.15
+    description: "Standard VAT rate (15% as of May 2020)"
+    applies_to: "Most goods and services"
+
+  - code: "Z"
+    name: "Zero Rated"
+    rate: 0.00
+    description: "Zero-rated supplies (e.g., exports, international transport)"
+    applies_to: "Exports, international transport, qualifying metals"
+
+  - code: "E"
+    name: "Exempt"
+    rate: 0.00
+    description: "VAT-exempt supplies (no input VAT recovery)"
+    applies_to: "Financial services, life insurance, residential property"
+
+  - code: "O"
+    name: "Out of Scope"
+    rate: null
+    description: "Transactions outside scope of KSA VAT"
+    applies_to: "Non-resident supplies, specific government services"
+
+  - code: "K"
+    name: "VAT Reverse Charge"
+    rate: null
+    description: "Reverse charge mechanism — buyer accounts for VAT"
+    applies_to: "Specific B2B transactions"
+
+# ---------------------------------------------------------------------------
+# TaxTotal Structure (Document-Level)
+# ---------------------------------------------------------------------------
+TaxTotal:
+  description: "VAT totals grouped by tax rate at document level"
+  fields:
+    - field: "tax_category"
+      type: "TaxCategory"
+      obligation: "mandatory"
+    - field: "taxable_amount"
+      type: "decimal"
+      obligation: "mandatory"
+      description: "Sum of line amounts subject to this VAT rate"
+    - field: "tax_amount"
+      type: "decimal"
+      obligation: "mandatory"
+      description: "VAT amount: taxable_amount × rate"
+    - field: "currency"
+      type: "string"
+      obligation: "mandatory"
+      default: "SAR"
+
+# ---------------------------------------------------------------------------
+# Tax Calculation Rules
+# ---------------------------------------------------------------------------
+calculation_rules:
+  - "tax_amount = taxable_amount × tax_category.rate"
+  - "total_vat_amount = sum of all TaxTotal.tax_amount"
+  - "tax_inclusive_amount = tax_exclusive_amount + total_vat_amount"
+  - "For Credit Notes: all tax amounts are negative (reversal)"
+  - "For Debit Notes: all tax amounts are positive (additional)"
+  - "VAT rounding: 2 decimal places, round half-up (commercial rounding)"
+  - "Line-level tax: gross_amount = net_amount + line_tax_amount"

@@ -1,0 +1,129 @@
+# ============================================================================
+# ZATCA Open Specification — Invoice Clearance API Contract
+# Version: 2.0.0
+# ============================================================================
+# Clearance is required for STANDARD (B2B) invoices in Phase 2.
+# The invoice is submitted to ZATCA BEFORE sending to the buyer.
+# ZATCA validates and returns a cryptographic stamp.
+# ============================================================================
+
+meta:
+  spec_version: "2.0.0"
+  api_version: "V2"
+  applies_to: ["Standard Tax Invoice", "Standard Credit Note", "Standard Debit Note"]
+  environments: ["Simulation", "Production"]
+
+# ---------------------------------------------------------------------------
+# Clearance Single Invoice
+# ---------------------------------------------------------------------------
+clearance_single:
+  endpoint:
+    method: "POST"
+    path: "/invoices/clearance/single"
+    description: "Submit a single standard invoice for clearance"
+
+  request:
+    headers:
+      - name: "Content-Type"
+        value: "application/json"
+      - name: "Accept-Version"
+        value: "V2"
+      - name: "Accept"
+        value: "application/json"
+      - name: "Authorization"
+        value: "Basic {base64(egs_uuid:secret)}"
+
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required:
+          - "invoiceXML"
+        properties:
+          invoiceXML:
+            type: "string"
+            description: "Base64-encoded UBL 2.1 XML invoice with XAdES signature"
+
+  response_success:
+    status: 200
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required:
+          - "clearedInvoice"
+          - "requestID"
+        properties:
+          clearedInvoice:
+            type: "string"
+            format: "Base64"
+            description: "Base64-encoded cleared XML with cryptographic stamp and QR embedded"
+          requestID:
+            type: "string"
+            format: "uuid-v4"
+            description: "ZATCA request identifier"
+          status:
+            type: "string"
+            enum: ["CLEARED", "PENDING"]
+            description: "Clearance status"
+
+  response_error:
+    status: "4xx | 5xx"
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        properties:
+          requestID:
+            type: "string"
+            format: "uuid-v4"
+          errors:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                code: { type: "string" }
+                message: { type: "string" }
+                category: { type: "string", enum: ["BUSINESS", "TECHNICAL", "SECURITY"] }
+
+# ---------------------------------------------------------------------------
+# Clearance Batch
+# ---------------------------------------------------------------------------
+clearance_batch:
+  endpoint:
+    method: "POST"
+    path: "/invoices/clearance/batch"
+    description: "Submit multiple standard invoices for clearance (max 50)"
+    max_batch_size: 50
+
+  request:
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required: ["invoiceXMLs"]
+        properties:
+          invoiceXMLs:
+            type: "array"
+            items:
+              type: "string"
+              format: "Base64"
+            max_items: 50
+
+  response_success:
+    status: 200
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        properties:
+          results:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                index: { type: "integer" }
+                status: { type: "string", enum: ["CLEARED", "FAILED"] }
+                clearedInvoice: { type: "string", format: "Base64" }
+                errors: { type: "array" }
+                requestID: { type: "string", format: "uuid-v4" }

@@ -1,0 +1,137 @@
+# ============================================================================
+# ZATCA Open Specification — Onboarding API Contract
+# Version: 2.0.0 (ZATCA API V2)
+# ============================================================================
+# Defines the API contract for EGS onboarding with ZATCA:
+#   - CSR Submission
+#   - Compliance Certificate Issuance
+#   - Production CSID Request
+# ============================================================================
+
+meta:
+  spec_version: "2.0.0"
+  api_version: "V2"
+  base_url_sandbox: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal"
+  base_url_production: "https://gw-fatoora.zatca.gov.sa/e-invoicing"
+  content_type: "application/json"
+
+# ---------------------------------------------------------------------------
+# Compliance Check (Sandbox/Simulation)
+# ---------------------------------------------------------------------------
+compliance_check:
+  endpoint:
+    method: "POST"
+    path: "/compliance"
+    description: "Submit CSR + OTP to receive a compliance certificate (CSID)"
+    environments: ["Sandbox", "Simulation"]
+
+  request:
+    headers:
+      - name: "Content-Type"
+        value: "application/json"
+      - name: "Accept"
+        value: "application/json"
+      - name: "OTP"
+        value: "{one_time_password}"
+        description: "OTP generated from ZATCA developer portal"
+
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required: ["csr"]
+        properties:
+          csr:
+            type: "string"
+            description: "PEM-encoded PKCS#10 CSR"
+            format: "PEM"
+
+  response_success:
+    status: 200
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required:
+          - "complianceRequestId"
+          - "certificate"
+          - "secret"
+        properties:
+          complianceRequestId:
+            type: "string"
+            format: "uuid-v4"
+            description: "Unique request identifier for compliance check"
+          certificate:
+            type: "string"
+            format: "Base64"
+            description: "Base64-encoded X.509 compliance certificate"
+          secret:
+            type: "string"
+            format: "Base64"
+            description: "Encrypted secret for key verification"
+
+  response_error:
+    status: "4xx | 5xx"
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        properties:
+          errors:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                code: { type: "string" }
+                message: { type: "string" }
+                severity: { type: "string", enum: ["ERROR", "WARN"] }
+
+# ---------------------------------------------------------------------------
+# Production CSID (Production)
+# ---------------------------------------------------------------------------
+production_csid:
+  endpoint:
+    method: "POST"
+    path: "/production/csids"
+    description: "Request production CSID using compliance certificate"
+    environments: ["Production"]
+    auth: "Compliance certificate (mutual TLS)"
+
+  request:
+    headers:
+      - name: "Content-Type"
+        value: "application/json"
+      - name: "Accept-Version"
+        value: "V2"
+      - name: "Accept"
+        value: "application/json"
+
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required: ["complianceRequestId"]
+        properties:
+          complianceRequestId:
+            type: "string"
+            format: "uuid-v4"
+            description: "Request ID from prior compliance check"
+
+  response_success:
+    status: 200
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required:
+          - "productionCertificate"
+          - "productionSecret"
+        properties:
+          productionCertificate:
+            type: "string"
+            format: "Base64"
+            description: "Base64-encoded X.509 production certificate"
+          productionSecret:
+            type: "string"
+            format: "Base64"
+            description: "Encrypted production secret"

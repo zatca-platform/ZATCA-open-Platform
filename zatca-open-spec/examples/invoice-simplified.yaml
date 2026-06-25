@@ -1,0 +1,77 @@
+# ============================================================================
+# ZATCA Open Specification — Example: Simplified Tax Invoice (B2C)
+# Version: 1.0.0
+# ============================================================================
+# A complete simplified tax invoice example compliant with Phase 2.
+# ============================================================================
+
+meta:
+  example_type: "Simplified Tax Invoice"
+  phase: 2
+  transaction_type: "Invoice"
+  description: "Retail sale of electronics to a consumer"
+
+invoice:
+  uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  invoice_number: "INV-SIMP-2026-0001"
+  invoice_counter_value: 1
+  previous_invoice_hash: null
+  invoice_type: "02"
+  transaction_type: "01"
+  issue_date: "2026-06-25T11:58:26+03:00"
+  supply_date: "2026-06-25T11:58:26+03:00"
+  currency: "SAR"
+
+  seller:
+    type: "seller"
+    legal_name: "شركة التقنية المحدودة"
+    trade_name: "TechCo"
+    vat_registration_number: "312345678901234"
+    crn_number: "1234567890"
+    address:
+      street_name: "Prince Mohammed bin Salman Road"
+      building_number: "4521"
+      city: "Riyadh"
+      city_subdivision: "Al Olaya"
+      postal_zone: "12211"
+      country_code: "SA"
+      plot_identification: "1234"
+
+  buyer: null
+
+  line_extension_amount: 1000.00
+  tax_exclusive_amount: 1000.00
+  tax_inclusive_amount: 1150.00
+  total_vat_amount: 150.00
+
+  tax_totals:
+    - tax_category:
+        id: "S"
+        rate: 0.15
+      taxable_amount: 1000.00
+      tax_amount: 150.00
+      currency: "SAR"
+
+  line_items:
+    - line_number: 1
+      description: "لابتوب محمول - موديل 2026"
+      quantity: 2
+      unit_code: "EA"
+      unit_price: 500.00
+      net_amount: 1000.00
+      tax_category:
+        id: "S"
+        rate: 0.15
+      tax_amount: 150.00
+      gross_amount: 1150.00
+
+  payment_means: "10"
+  notes:
+    - "شكراً لاختياركم منتجاتنا"
+
+  egs_uuid: "e5f6a1b2-c3d4-7890-abcd-ef1234567890"
+  invoice_hash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
+  digital_signature: "MEUCIQD..."
+  digital_signature_type: "XADES_EPES_v1.3.2"
+  public_key: "MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE..."
+  qr_code: "ARFJ...Base64TLV..."

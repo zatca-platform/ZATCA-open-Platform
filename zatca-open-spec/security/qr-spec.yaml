@@ -1,0 +1,236 @@
+# ============================================================================
+# ZATCA Open Specification — QR Code Specification (TLV)
+# Version: 1.0.0
+# Standards: ZATCA E-Invoice Security Features Implementation Standard
+# ============================================================================
+# Defines the TLV (Tag-Length-Value) structure for ZATCA QR codes.
+#
+# Phase 1: 5 tags (Simplified Tax Invoice QR)
+# Phase 2: 9 tags (Full compliance QR embedded in signed XML)
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  encoding: "TLV Base64"
+  tag_encoding: "1 byte unsigned integer"
+  length_encoding: "1 byte unsigned integer"
+  value_encoding: "UTF-8 string | bytes"
+
+# ---------------------------------------------------------------------------
+# Tag Definitions
+# ---------------------------------------------------------------------------
+tags:
+
+  # ---- Phase 1 (5 tags) ----
+  - tag: 1
+    phase: 1
+    name: "seller_name"
+    description: "Seller legal name (as registered with ZATCA)"
+    type: "string"
+    encoding: "UTF-8"
+    max_length: 256
+    obligation: "mandatory"
+    example: "شركة التقنية المحدودة"
+
+  - tag: 2
+    phase: 1
+    name: "vat_number"
+    description: "Seller VAT registration number"
+    type: "string"
+    encoding: "UTF-8"
+    max_length: 20
+    obligation: "mandatory"
+    format: "KSA VAT: 15 digits starting with 3"
+    example: "312345678901234"
+
+  - tag: 3
+    phase: 1
+    name: "timestamp"
+    description: "Invoice issue date and time (ISO 8601)"
+    type: "string"
+    encoding: "UTF-8"
+    max_length: 32
+    obligation: "mandatory"
+    format: "ISO 8601 with timezone"
+    example: "2026-06-25T11:58:26+03:00"
+
+  - tag: 4
+    phase: 1
+    name: "invoice_total"
+    description: "Total invoice amount inclusive of VAT (SAR)"
+    type: "string"
+    encoding: "UTF-8"
+    max_length: 20
+    obligation: "mandatory"
+    format: "Decimal with 2 places"
+    example: "1150.00"
+
+  - tag: 5
+    phase: 1
+    name: "vat_total"
+    description: "Total VAT amount (SAR)"
+    type: "string"
+    encoding: "UTF-8"
+    max_length: 20
+    obligation: "mandatory"
+    format: "Decimal with 2 places"
+    example: "150.00"
+
+  # ---- Phase 2 (additional 4 tags, total 9) ----
+  - tag: 6
+    phase: 2
+    name: "invoice_hash"
+    description: "SHA-256 hash of the signed invoice XML (canonicalized)"
+    type: "bytes"
+    encoding: "Base64"
+    max_length: 64
+    obligation: "mandatory"
+    format: "SHA-256 hex → decoded to bytes then Base64"
+    example: "a1b2c3d4e5f6..."
+
+  - tag: 7
+    phase: 2
+    name: "digital_signature"
+    description: "ECDSA secp256k1 signature of the invoice hash"
+    type: "bytes"
+    encoding: "Base64"
+    max_length: 128
+    obligation: "mandatory"
+    format: "DER-encoded ECDSA signature → Base64"
+    example: "MEUCIQD..."
+
+  - tag: 8
+    phase: 2
+    name: "public_key"
+    description: "ECDSA secp256k1 public key of the seller"
+    type: "bytes"
+    encoding: "Base64"
+    max_length: 128
+    obligation: "mandatory"
+    format: "EC public key (uncompressed or compressed) → Base64"
+    example: "MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE..."
+
+  - tag: 9
+    phase: 2
+    name: "signature_type"
+    description: "Digital signature type / standard used"
+    type: "string"
+    encoding: "UTF-8"
+    max_length: 32
+    obligation: "mandatory"
+    default: "XADES_EPES_v1.3.2"
+    example: "XADES_EPES_v1.3.2"
+
+# ---------------------------------------------------------------------------
+# TLV Encoding Specification
+# ---------------------------------------------------------------------------
+encoding:
+
+  tag:
+    type: "unsigned byte"
+    size: "1 byte"
+    range: "1 to 9"
+    byte_order: "Big Endian"
+
+  length:
+    type: "unsigned byte"
+    size: "1 byte"
+    range: "0 to 255"
+    description: "Length in bytes of the value field"
+    notes:
+      - "Must equal the byte length of the encoded value BEFORE Base64 encoding"
+      - "Max per tag is 255 bytes; values exceeding 255 bytes must be truncated or the spec must extend length to 2 bytes"
+
+  value:
+    description: "The actual data payload"
+    encoding:
+      - "Tags 1-5: UTF-8 string"
+      - "Tags 6-8: Raw bytes (before Base64; stored as decoded binary in TLV, but the TLV value itself is stored as binary and then the entire TLV block is Base64 encoded)"
+      - "Tag 9: UTF-8 string"
+    notes:
+      - "For binary tags (6, 7, 8): Store raw DER/binary bytes in the TLV value field, NOT the Base64 string"
+
+# ---------------------------------------------------------------------------
+# QR Assembly Process
+# ---------------------------------------------------------------------------
+assembly:
+  description: "Step-by-step process to build the ZATCA QR code"
+
+  steps:
+    - step: 1
+      action: "Collect tag data"
+      description: "Gather all required tag values from the invoice"
+
+    - step: 2
+      action: "Encode each tag"
+      description: "For each tag, build: [1-byte tag] [1-byte length] [N-byte value]"
+      details:
+        - "Tag 1-5, 9: Encode value as UTF-8 bytes"
+        - "Tag 6-8: Use raw binary bytes (decode from hex/Base64 if needed)"
+
+    - step: 3
+      action: "Concatenate TLV blocks"
+      description: "Concatenate all TLV triplets in tag order (1, 2, 3, ..., 9)"
+
+    - step: 4
+      action: "Base64 encode"
+      description: "Encode the entire concatenated TLV byte sequence as Base64"
+      algorithm: "Base64 (RFC 4648)"
+
+    - step: 5
+      action: "Generate QR image (optional)"
+      description: "Render the Base64 string as a QR code image"
+      recommended_version: "QR 3-5 (depending on data length)"
+      error_correction: "M (15%)"
+
+# ---------------------------------------------------------------------------
+# Validation Rules for QR
+# ---------------------------------------------------------------------------
+validation:
+  - id: "QR-001"
+    description: "TLV sequence must contain exactly 5 tags (Phase 1) or 9 tags (Phase 2)"
+    severity: "ERROR"
+
+  - id: "QR-002"
+    description: "Tags must appear in numeric order (1, 2, 3, ..., 9)"
+    severity: "ERROR"
+
+  - id: "QR-003"
+    description: "Each tag's value must not exceed its max_length"
+    severity: "ERROR"
+
+  - id: "QR-004"
+    description: "Base64 encoding must be valid and decode without error"
+    severity: "ERROR"
+
+  - id: "QR-005"
+    description: "Decoded TLV must have correct structure: tag header (1B) + length header (1B) + value (N bytes)"
+    severity: "ERROR"
+
+  - id: "QR-006"
+    description: "Tag 6 value must decode to a valid SHA-256 hash (32 bytes in binary)"
+    severity: "ERROR"
+
+  - id: "QR-007"
+    description: "Tag 7 value must decode to a valid ECDSA signature (DER format)"
+    severity: "ERROR"
+
+  - id: "QR-008"
+    description: "Tag 9 must be 'XADES_EPES_v1.3.2' (case-sensitive) or approved alternative"
+    severity: "ERROR"
+
+# ---------------------------------------------------------------------------
+# Phase 1 vs Phase 2 TLV Tag Comparison
+# ---------------------------------------------------------------------------
+phase_differences:
+  phase1:
+    tag_count: 5
+    tags: [1, 2, 3, 4, 5]
+    description: "Basic QR with seller identity and invoice amounts"
+    obligation: "Mandatory for Simplified Tax Invoices from Dec 4, 2021"
+
+  phase2:
+    tag_count: 9
+    tags: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    description: "Full QR with cryptographic integrity chain"
+    obligation: "Mandatory for ALL invoices in Phase 2"

@@ -1,0 +1,289 @@
+# ============================================================================
+# ZATCA Open Specification — Party Domain Model
+# Version: 1.0.0
+# Standards: UBL 2.1, ZATCA E-Invoice Data Dictionary (2023-05-19)
+# ============================================================================
+# Defines parties involved in an invoice transaction:
+#   - Seller (Supplier)
+#   - Buyer (Customer)
+#   - Payee
+#   - Delivery Party
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  model: "Party"
+  domain: "ZATCA E-Invoicing"
+  standards:
+    - "UBL 2.1"
+    - "ISO 3166-1"
+    - "ISO 6523"
+    - "KSA National Address"
+
+# ---------------------------------------------------------------------------
+# Enumerations
+# ---------------------------------------------------------------------------
+enums:
+
+  PartyType:
+    values:
+      - { code: "seller", name: "Seller/Supplier" }
+      - { code: "buyer", name: "Buyer/Customer" }
+      - { code: "payee", name: "Payee" }
+      - { code: "delivery", name: "Delivery Party" }
+
+  LegalEntityType:
+    values:
+      - "Individual"
+      - "Company"
+      - "Government"
+      - "NonProfit"
+      - "Partnership"
+      - "Other"
+
+# ---------------------------------------------------------------------------
+# Party Model
+# ---------------------------------------------------------------------------
+Party:
+  description: "Generic party participating in the invoice transaction"
+
+  fields:
+
+    # --- Identification ---
+    - name: "type"
+      type: "enum"
+      ref: "PartyType"
+      phase: 1
+      obligation: "mandatory"
+      description: "Role of this party in the transaction"
+
+    - name: "uuid"
+      type: "string"
+      format: "uuid-v4"
+      phase: 2
+      obligation: "optional"
+      description: "Party UUID (EGS assigned)"
+
+    - name: "legal_name"
+      type: "string"
+      phase: 1
+      obligation: "mandatory"
+      description: "Full legal name of the party as registered with ZATCA"
+      constraints:
+        - "Max length: 256"
+        - "Must match the name registered with KSA authorities"
+
+    - name: "trade_name"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Trading name or brand name (if different from legal name)"
+      constraints:
+        - "Max length: 256"
+
+    - name: "legal_entity_type"
+      type: "enum"
+      ref: "LegalEntityType"
+      phase: 1
+      obligation: "optional"
+      description: "Legal form of the entity"
+
+    # --- Registration Identifiers ---
+    - name: "vat_registration_number"
+      type: "string"
+      phase: 1
+      obligation: "conditional"
+      description: "VAT registration number (15 digits for KSA)"
+      constraints:
+        - "KSA VAT: exactly 15 digits"
+        - "Format: 3XXXXXXXXXXXXX (starts with 3)"
+        - "Must pass check-digit validation"
+      meta:
+        mandatory_for: ["seller"]
+        conditional_for: ["buyer"]
+
+    - name: "crn_number"
+      type: "string"
+      phase: 1
+      obligation: "conditional"
+      description: "Commercial Registration Number (CRN)"
+      constraints:
+        - "KSA CRN: exactly 10 digits"
+      meta:
+        mandatory_for: ["seller"]
+
+    - name: "additional_identifiers"
+      type: "array"
+      item_type: "Identifier"
+      phase: 2
+      obligation: "optional"
+      description: "Additional government-issued identifiers"
+
+    # --- Address ---
+    - name: "address"
+      type: "Address"
+      ref: "#/Address"
+      phase: 1
+      obligation: "mandatory"
+      description: "Registered address of the party"
+
+    # --- Contact ---
+    - name: "contact"
+      type: "Contact"
+      ref: "#/Contact"
+      phase: 1
+      obligation: "optional"
+      description: "Contact information"
+
+    # --- Bank Account (for Payee) ---
+    - name: "bank_account"
+      type: "BankAccount"
+      ref: "#/BankAccount"
+      phase: 1
+      obligation: "optional"
+      description: "Bank account details (primarily for payee)"
+      meta:
+        recommended_for: ["payee"]
+
+# ---------------------------------------------------------------------------
+# Sub-types
+# ---------------------------------------------------------------------------
+Address:
+  description: "Structured address per KSA National Address standard"
+
+  fields:
+    - name: "street_name"
+      type: "string"
+      phase: 1
+      obligation: "conditional"
+      description: "Street name"
+      constraints:
+        - "Max length: 256"
+      meta:
+        mandatory_for: ["seller"]
+
+    - name: "building_number"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Building number"
+      constraints:
+        - "KSA building numbers are 4-digit"
+
+    - name: "additional_street"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Additional street/delivery information"
+
+    - name: "city"
+      type: "string"
+      phase: 1
+      obligation: "mandatory"
+      description: "City name"
+      constraints:
+        - "Max length: 128"
+
+    - name: "city_subdivision"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "City district or suburb"
+      constraints:
+        - "Max length: 128"
+
+    - name: "postal_zone"
+      type: "string"
+      phase: 1
+      obligation: "conditional"
+      description: "Postal code / ZIP code"
+      constraints:
+        - "KSA: 5-digit postal code"
+      meta:
+        mandatory_for: ["seller"]
+
+    - name: "country_code"
+      type: "string"
+      format: "ISO 3166-1 alpha-2"
+      phase: 1
+      obligation: "mandatory"
+      description: "Country code"
+      default: "SA"
+
+    - name: "plot_identification"
+      type: "string"
+      phase: 2
+      obligation: "optional"
+      description: "Plot identification number (KSA National Address)"
+      constraints:
+        - "KSA: 4-digit plot number"
+
+Contact:
+  description: "Contact information for a party"
+
+  fields:
+    - name: "name"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Contact person name"
+
+    - name: "telephone"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Telephone number"
+      constraints:
+        - "Include country code for KSA: +966XXXXXXXXX"
+
+    - name: "email"
+      type: "string"
+      format: "email"
+      phase: 1
+      obligation: "optional"
+      description: "Email address"
+
+    - name: "website_uri"
+      type: "string"
+      format: "uri"
+      phase: 1
+      obligation: "optional"
+      description: "Website URL"
+
+Identifier:
+  description: "Generic identifier with scheme"
+
+  fields:
+    - name: "value"
+      type: "string"
+      obligation: "mandatory"
+    - name: "scheme_id"
+      type: "string"
+      obligation: "mandatory"
+      description: "Identifier scheme (e.g., 'CRN', 'MOMRA', 'NID')"
+    - name: "scheme_agency"
+      type: "string"
+      obligation: "optional"
+      default: "KSA"
+
+BankAccount:
+  description: "Bank account details"
+
+  fields:
+    - name: "bank_name"
+      type: "string"
+      obligation: "optional"
+    - name: "iban"
+      type: "string"
+      obligation: "conditional"
+      description: "International Bank Account Number"
+      constraints:
+        - "KSA IBAN: starts with SA, 24 characters"
+    - name: "account_number"
+      type: "string"
+      obligation: "conditional"
+    - name: "swift_code"
+      type: "string"
+      obligation: "optional"
+      constraints:
+        - "8 or 11 characters, SWIFT format"

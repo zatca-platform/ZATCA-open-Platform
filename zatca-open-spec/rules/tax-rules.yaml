@@ -1,0 +1,149 @@
+# ============================================================================
+# ZATCA Open Specification — Tax Calculation & Business Rules
+# Version: 1.0.0
+# Standards: KSA VAT Law, ZATCA E-Invoicing Resolution
+# ============================================================================
+# Defines KSA-specific tax business rules that must be enforced during
+# invoice generation and validation.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  tax_standard: "KSA VAT Law (implemented 2018, 15% rate from May 2020)"
+  vat_rate: 0.15
+  currency: "SAR"
+
+# ---------------------------------------------------------------------------
+# VAT Obligation Matrix
+# ---------------------------------------------------------------------------
+vat_obligation_matrix:
+  description: "Determines when VAT applies based on transaction and party types"
+
+  standard_invoice:
+    supplier_is_resident: true
+    buyer_is_resident: true
+    vat_applies: true
+    rate: 0.15
+    note: "Standard B2B domestic supply"
+
+  export_invoice:
+    supplier_is_resident: true
+    buyer_is_resident: false
+    vat_applies: true
+    rate: 0.00
+    category: "Z"
+    note: "Export zero-rated with exemption code VATEX-KSA-05"
+
+  simplified_invoice:
+    supplier_is_resident: true
+    buyer_is_consumer: true
+    vat_applies: true
+    rate: 0.15
+    note: "B2C retail simplified"
+
+  exempt_supply:
+    vat_applies: true
+    rate: 0.00
+    category: "E"
+    note: "Financial services, insurance, residential property"
+
+# ---------------------------------------------------------------------------
+# Tax Calculation Formulas
+# ----------------------------------------------------------------------------
+formulas:
+
+  line_tax_amount:
+    description: "Tax amount for a single line item"
+    expression: "net_amount × tax_category.rate"
+    constraints:
+      - "net_amount = quantity × unit_price (before line discounts)"
+      - "rate is decimal (0.15 for 15%)"
+    rounding: "2 decimal places, half-up"
+
+  line_gross_amount:
+    description: "Gross amount for a single line item"
+    expression: "net_amount + line_tax_amount"
+    constraints: ["2 decimal places"]
+
+  total_taxable_amount_per_rate:
+    description: "Sum of line net_amounts grouped by tax rate"
+    expression: "sum(line_items where tax_category.id == X → net_amount)"
+    constraints: ["Must be calculated per unique VAT rate"]
+
+  total_vat_per_rate:
+    description: "VAT total per tax rate"
+    expression: "total_taxable_amount_per_rate × rate"
+    constraints: ["2 decimal places"]
+
+  total_vat:
+    description: "Document total VAT"
+    expression: "sum(tax_totals[].tax_amount)"
+    constraints: ["2 decimal places"]
+
+  tax_exclusive_amount:
+    description: "Total before VAT"
+    expression: "line_extension_amount + sum(charges) - sum(allowances)"
+    constraints: ["2 decimal places"]
+
+  tax_inclusive_amount:
+    description: "Grand total including VAT"
+    expression: "tax_exclusive_amount + total_vat"
+    constraints: ["2 decimal places"]
+
+  credit_note_totals:
+    description: "All totals are negative for credit notes"
+    expression: "All monetary amounts = -(original_amount)"
+    constraints:
+      - "Total must be ≤ 0"
+      - "Reference must point to original invoice"
+
+# ---------------------------------------------------------------------------
+# KSA-Specific Tax Constraints
+# ---------------------------------------------------------------------------
+ksa_constraints:
+  - "Standard VAT rate is 15% (0.15) — effective May 11, 2020"
+  - "No reduced rates exist in KSA"
+  - "VAT registration number: 15 digits, starts with 3"
+  - "All amounts in SAR unless otherwise specified"
+  - "Foreign currency invoices must specify tax_currency and exchange rate"
+  - "VAT rounding: commercial rounding (half-up) to 2 decimal places"
+  - "Zero-rated supplies must include exemption reason code"
+  - "Exempt supplies must include exemption reason code"
+  - "Mixed VAT rates in same invoice: separate TaxTotal per rate"
+
+# ---------------------------------------------------------------------------
+# Exemption Reason Codes
+# ---------------------------------------------------------------------------
+exemption_codes:
+  description: "Valid KSA VAT exemption reason codes"
+  all:
+    - code: "VATEX-KSA-01"
+      name: "Financial services"
+      category: "E"
+    - code: "VATEX-KSA-02"
+      name: "Life insurance"
+      category: "E"
+    - code: "VATEX-KSA-03"
+      name: "Residential properties"
+      category: "E"
+    - code: "VATEX-KSA-04"
+      name: "Supply of land"
+      category: "E"
+    - code: "VATEX-KSA-05"
+      name: "Export of goods"
+      category: "Z"
+    - code: "VATEX-KSA-06"
+      name: "International transport"
+      category: "Z"
+    - code: "VATEX-KSA-07"
+      name: "Qualifying metals"
+      category: "Z"
+    - code: "VATEX-KSA-08"
+      name: "Healthcare services"
+      category: "E"
+    - code: "VATEX-KSA-09"
+      name: "Education services"
+      category: "E"
+    - code: "VATEX-KSA-10"
+      name: "Other exempt supply"
+      category: "E"

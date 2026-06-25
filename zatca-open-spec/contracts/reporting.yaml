@@ -1,0 +1,129 @@
+# ============================================================================
+# ZATCA Open Specification — Invoice Reporting API Contract
+# Version: 2.0.0
+# ============================================================================
+# Reporting is required for SIMPLIFIED (B2C) invoices in Phase 2.
+# The invoice is sent to ZATCA after sharing with the buyer.
+# ZATCA acknowledges and logs the invoice.
+# ============================================================================
+
+meta:
+  spec_version: "2.0.0"
+  api_version: "V2"
+  applies_to: ["Simplified Tax Invoice"]
+  environments: ["Simulation", "Production"]
+
+# ---------------------------------------------------------------------------
+# Report Single Invoice
+# ---------------------------------------------------------------------------
+reporting_single:
+  endpoint:
+    method: "POST"
+    path: "/invoices/reporting/single"
+    description: "Report a single simplified invoice to ZATCA"
+
+  request:
+    headers:
+      - name: "Content-Type"
+        value: "application/json"
+      - name: "Accept-Version"
+        value: "V2"
+      - name: "Accept"
+        value: "application/json"
+      - name: "Authorization"
+        value: "Basic {base64(egs_uuid:secret)}"
+
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required:
+          - "invoiceXML"
+        properties:
+          invoiceXML:
+            type: "string"
+            description: "Base64-encoded UBL 2.1 XML invoice with XAdES signature"
+
+  response_success:
+    status: 200
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required:
+          - "reportedInvoice"
+          - "requestID"
+        properties:
+          reportedInvoice:
+            type: "string"
+            format: "Base64"
+            description: "Base64-encoded reported XML with QR and status embedded"
+          requestID:
+            type: "string"
+            format: "uuid-v4"
+            description: "ZATCA request identifier"
+          status:
+            type: "string"
+            enum: ["REPORTED", "PENDING"]
+            description: "Reporting status"
+
+  response_error:
+    status: "4xx | 5xx"
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        properties:
+          requestID:
+            type: "string"
+            format: "uuid-v4"
+          errors:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                code: { type: "string" }
+                message: { type: "string" }
+                category: { type: "string", enum: ["BUSINESS", "TECHNICAL", "SECURITY"] }
+
+# ---------------------------------------------------------------------------
+# Report Batch
+# ---------------------------------------------------------------------------
+reporting_batch:
+  endpoint:
+    method: "POST"
+    path: "/invoices/reporting/batch"
+    description: "Report multiple simplified invoices (max 50)"
+    max_batch_size: 50
+
+  request:
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        required: ["invoiceXMLs"]
+        properties:
+          invoiceXMLs:
+            type: "array"
+            items:
+              type: "string"
+              format: "Base64"
+            max_items: 50
+
+  response_success:
+    status: 200
+    body:
+      type: "json"
+      schema:
+        type: "object"
+        properties:
+          results:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                index: { type: "integer" }
+                status: { type: "string", enum: ["REPORTED", "FAILED"] }
+                reportedInvoice: { type: "string", format: "Base64" }
+                errors: { type: "array" }
+                requestID: { type: "string", format: "uuid-v4" }

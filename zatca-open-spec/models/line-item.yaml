@@ -1,0 +1,89 @@
+# ============================================================================
+# ZATCA Open Specification — Line Item Model
+# Version: 1.0.0
+# ============================================================================
+# The LineItem, TaxCategory, and AllowanceCharge types are defined within
+# the invoice.yaml model as sub_types. This file provides a standalone
+# reference for SDK implementors.
+#
+# See: ../models/invoice.yaml → sub_types.LineItem
+#      ../models/invoice.yaml → sub_types.TaxCategory
+#      ../models/invoice.yaml → sub_types.AllowanceCharge
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  defined_in: "../models/invoice.yaml#/sub_types/LineItem"
+  description: "Delegated to invoice.yaml — LineItem, TaxCategory, AllowanceCharge"
+
+# Quick reference (full details in invoice.yaml)
+LineItem:
+  fields:
+    - field: "line_number"
+      type: "integer"
+      obligation: "mandatory"
+    - field: "product_code"
+      type: "string"
+      obligation: "conditional"
+    - field: "description"
+      type: "string"
+      obligation: "mandatory"
+    - field: "quantity"
+      type: "decimal"
+      obligation: "mandatory"
+      constraints: "> 0"
+    - field: "unit_price"
+      type: "decimal"
+      obligation: "mandatory"
+    - field: "net_amount"
+      type: "decimal"
+      obligation: "mandatory"
+    - field: "tax_category"
+      type: "TaxCategory"
+      obligation: "mandatory"
+    - field: "tax_amount"
+      type: "decimal"
+      obligation: "mandatory"
+    - field: "gross_amount"
+      type: "decimal"
+      obligation: "mandatory"
+    - field: "allowances"
+      type: "array[AllowanceCharge]"
+      obligation: "optional"
+    - field: "charges"
+      type: "array[AllowanceCharge]"
+      obligation: "optional"
+
+TaxCategory:
+  fields:
+    - field: "id"
+      type: "enum(VATCategory)"
+      obligation: "mandatory"
+      values: ["S", "Z", "E", "O", "K"]
+    - field: "rate"
+      type: "decimal"
+      obligation: "conditional"
+    - field: "exemption_reason_code"
+      type: "string"
+      obligation: "conditional"
+    - field: "exemption_reason_text"
+      type: "string"
+      obligation: "conditional"
+
+AllowanceCharge:
+  fields:
+    - field: "charge_indicator"
+      type: "boolean"
+      obligation: "mandatory"
+    - field: "reason_code"
+      type: "string"
+      obligation: "conditional"
+    - field: "reason_text"
+      type: "string"
+      obligation: "conditional"
+    - field: "amount"
+      type: "decimal"
+      obligation: "mandatory"
+    - field: "percentage"
+      type: "decimal"
+      obligation: "optional"

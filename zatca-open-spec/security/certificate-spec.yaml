@@ -1,0 +1,163 @@
+# ============================================================================
+# ZATCA Open Specification — Certificate Management (CSR & CSID)
+# Version: 1.0.0
+# Standards: ZATCA Onboarding API V2, ECDSA secp256k1, X.509
+# ============================================================================
+# Defines the certificate lifecycle: CSR generation → Onboarding → Compliance
+# CSID → Production CSID → Renewal
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  cert_standard: "X.509 v3"
+  key_algorithm: "ECDSA"
+  curve: "secp256k1"
+  hash_algorithm: "SHA-256"
+
+# ---------------------------------------------------------------------------
+# Onboarding Flow
+# ---------------------------------------------------------------------------
+onboarding_flow:
+  description: "The process of obtaining a ZATCA compliance certificate (CSID)"
+
+  environments:
+    - name: "Sandbox"
+      base_url: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal"
+      purpose: "Development & testing"
+      compliance_endpoint: "/compliance"
+      production_endpoint: null
+
+    - name: "Simulation"
+      base_url: "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation"
+      purpose: "Pre-production validation"
+      compliance_endpoint: "/compliance"
+      production_endpoint: "/invoices"
+
+    - name: "Production"
+      base_url: "https://gw-fatoora.zatca.gov.sa/e-invoicing"
+      purpose: "Live invoices"
+      compliance_endpoint: "/compliance"
+      production_endpoint: "/invoices"
+
+  steps:
+    - step: "generate_csr"
+      description: "Generate ECDSA key pair and CSR"
+      details:
+        subject_fields:
+          - { name: "common_name (CN)", value: "EGS UUID or Solution Name", mandatory: true }
+          - { name: "organization (O)", value: "Seller legal name", mandatory: true }
+          - { name: "country (C)", value: "SA", mandatory: true }
+          - { name: "serial_number", value: "VAT registration number", mandatory: true }
+          - { name: "organization_identifier", value: "VAT:XXXXXXXXXXXXXX", mandatory: true }
+          - { name: "email_address", value: "Contact email", optional: true }
+
+    - step: "compliance_check"
+      description: "Submit CSR + OTP to ZATCA Sandbox/Simulation compliance API"
+      api:
+        method: "POST"
+        endpoint: "/compliance"
+        request_body:
+          csr: "PEM-encoded CSR"
+          otp: "One-Time Password from ZATCA portal"
+        response:
+          status: "200 OK"
+          body:
+            compliance_request_id: "string"
+            certificate: "Base64-encoded X.509 compliance certificate"
+            secret: "Encrypted secret for key verification"
+
+    - step: "production_onboarding"
+      description: "Use compliance certificate to request production CSID"
+      api:
+        method: "POST"
+        endpoint: "/production/csids"
+        request_body:
+          compliance_request_id: "string"
+          certificate: "PEM-encoded compliance certificate"
+        response:
+          status: "200 OK"
+          body:
+            production_certificate: "Base64-encoded X.509 production certificate"
+            production_secret: "Encrypted production secret"
+
+# ---------------------------------------------------------------------------
+# CSR Specification
+# ---------------------------------------------------------------------------
+csr:
+  description: "Certificate Signing Request structure"
+
+  format: "PKCS#10"
+  encoding: "PEM"
+
+  subject_dn_template:
+    common_name: "{egs_uuid}"
+    organization: "{seller_legal_name}"
+    country: "SA"
+    serial_number: "{vat_number}"
+    organization_identifier: "VAT:{vat_number}"
+
+  key_usage:
+    - "digitalSignature"
+    - "nonRepudiation"
+    - "keyAgreement"
+
+  extended_key_usage:
+    - "1.3.6.1.5.5.7.3.2"  # TLS Web Client Authentication
+    - "1.3.6.1.5.5.7.3.1"  # TLS Web Server Authentication
+
+# ---------------------------------------------------------------------------
+# Certificate Storage
+# ---------------------------------------------------------------------------
+certificate_storage:
+  description: "Secure storage requirements for ZATCA certificates"
+
+  secrets:
+    - secret: "private_key"
+      storage: "Encrypted at rest (AES-256-CBC)"
+      access: "Application only; never exposed to logs"
+
+    - secret: "compliance_certificate"
+      storage: "File system or DB with restricted access"
+      access: "Application only"
+
+    - secret: "production_certificate"
+      storage: "File system or DB with restricted access"
+      access: "Application only"
+
+    - secret: "secret"
+      storage: "Encrypted at rest"
+      access: "Only during onboarding/clearing"
+
+  rotation:
+    certificate_validity: "Defined by ZATCA (typically 3 years)"
+    renewal_process: "Re-run onboarding flow before certificate expiry"
+    grace_period: "30 days before expiry"
+
+# ---------------------------------------------------------------------------
+# Validation & Verification
+# ---------------------------------------------------------------------------
+validation:
+  - id: "CERT-001"
+    description: "Certificate must not be expired"
+    severity: "ERROR"
+    check: "current_date < certificate.notAfter"
+
+  - id: "CERT-002"
+    description: "Certificate must be issued by ZATCA CA"
+    severity: "ERROR"
+    check: "issuer matches ZATCA trusted root"
+
+  - id: "CERT-003"
+    description: "Public key in certificate must match the signing private key"
+    severity: "ERROR"
+    check: "Verify signature signed with private key, decrypted with certificate's public key"
+
+  - id: "CERT-004"
+    description: "Private key must be accessible and valid"
+    severity: "ERROR"
+    check: "Can decrypt a test ciphertext"
+
+  - id: "CERT-005"
+    description: "CSR subject must match EGS registration data"
+    severity: "ERROR"
+    check: "CSR subject fields match configured EGS values"

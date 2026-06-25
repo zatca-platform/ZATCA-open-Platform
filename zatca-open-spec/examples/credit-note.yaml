@@ -1,0 +1,87 @@
+# ============================================================================
+# ZATCA Open Specification — Example: Credit Note
+# Version: 1.0.0
+# ============================================================================
+# Example of a credit note referencing an original standard invoice.
+# ============================================================================
+
+meta:
+  example_type: "Credit Note"
+  phase: 2
+  transaction_type: "CreditNote"
+  description: "Credit note for returned defective hardware"
+
+invoice:
+  uuid: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+  invoice_number: "CN-2026-0001"
+  invoice_counter_value: 43
+  previous_invoice_hash: "1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777aaaa8888bbbb"
+  invoice_type: "01"
+  transaction_type: "02"
+  issue_date: "2026-06-25T10:00:00+03:00"
+  supply_date: "2026-06-20T09:00:00+03:00"
+  currency: "SAR"
+  credit_note_reason: "إرجاع خوادم تخزين معيبة - فاتورة رقم INV-STD-2026-0042"
+
+  billing_reference:
+    document_type: "Invoice"
+    document_number: "INV-STD-2026-0042"
+    uuid: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+
+  seller:
+    type: "seller"
+    legal_name: "شركة الحلول المتكاملة"
+    vat_registration_number: "398765432109876"
+    crn_number: "9876543210"
+    address:
+      street_name: "King Fahd Road"
+      building_number: "7890"
+      city: "Jeddah"
+      city_subdivision: "Al Shati"
+      postal_zone: "23415"
+      country_code: "SA"
+
+  buyer:
+    type: "buyer"
+    legal_name: "شركة البيت الحديث للتجارة"
+    vat_registration_number: "355555555555555"
+    address:
+      street_name: "Al Madinah Road"
+      building_number: "1234"
+      city: "Jeddah"
+      city_subdivision: "Al Faisaliyah"
+      postal_zone: "23422"
+      country_code: "SA"
+
+  line_extension_amount: -20000.00
+  tax_exclusive_amount: -20000.00
+  tax_inclusive_amount: -23000.00
+  total_vat_amount: -3000.00
+
+  tax_totals:
+    - tax_category:
+        id: "S"
+        rate: 0.15
+      taxable_amount: -20000.00
+      tax_amount: -3000.00
+      currency: "SAR"
+
+  line_items:
+    - line_number: 1
+      product_code: "HW-042"
+      description: "خوادم تخزين معيبة - مرتجعة"
+      quantity: -5
+      unit_code: "EA"
+      unit_price: 4000.00
+      net_amount: -20000.00
+      tax_category:
+        id: "S"
+        rate: 0.15
+      tax_amount: -3000.00
+      gross_amount: -23000.00
+
+  egs_uuid: "e5f6a1b2-c3d4-7890-abcd-ef1234567890"
+  invoice_hash: "3333cccc4444dddd5555eeee6666ffff7777aaaa8888bbbb9999cccc0000dddd"
+  digital_signature: "MEUCIQDa..."
+  digital_signature_type: "XADES_EPES_v1.3.2"
+  public_key: "MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE..."

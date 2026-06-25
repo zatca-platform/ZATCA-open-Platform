@@ -1,0 +1,331 @@
+# ============================================================================
+# ZATCA Open Specification — Standard Error Codes
+# Version: 1.0.0
+# ============================================================================
+# Defines standardized error codes used across the spec.
+# Each error code maps to a specific validation rule or API scenario.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  total_codes: 35
+
+# ---------------------------------------------------------------------------
+# Error Code Structure
+# ---------------------------------------------------------------------------
+# code:        Unique error identifier
+# category:    BUSINESS | TECHNICAL | SECURITY | VALIDATION
+# severity:    ERROR | WARN
+# phase:       1 | 2
+# message:     Human-readable message template
+# http_status: Recommended HTTP status code (where applicable)
+# rule_ref:    Reference to validation rule
+# ---------------------------------------------------------------------------
+
+error_codes:
+
+  # ---- Validation Errors (V) ----
+  - code: "V-001"
+    category: "VALIDATION"
+    severity: "ERROR"
+    phase: 1
+    message: "Missing mandatory field: {field}"
+    http_status: 422
+    description: "A field marked as mandatory is absent or empty"
+
+  - code: "V-002"
+    category: "VALIDATION"
+    severity: "ERROR"
+    phase: 1
+    message: "Field {field} exceeds maximum length of {max_length}"
+    http_status: 422
+
+  - code: "V-003"
+    category: "VALIDATION"
+    severity: "ERROR"
+    phase: 1
+    message: "Field {field} has invalid format: expected {format}"
+    http_status: 422
+
+  - code: "V-004"
+    category: "VALIDATION"
+    severity: "ERROR"
+    phase: 1
+    message: "Monetary total mismatch: {field} = {value}, expected {expected}"
+    http_status: 422
+
+  - code: "V-005"
+    category: "VALIDATION"
+    severity: "WARN"
+    phase: 1
+    message: "Conditional field {field} recommended when {condition}"
+
+  - code: "V-006"
+    category: "VALIDATION"
+    severity: "ERROR"
+    phase: 1
+    message: "Invalid enum value '{value}' for field {field}; must be one of {allowed_values}"
+    http_status: 422
+
+  # ---- Business Rule Errors (B) ----
+  - code: "B-001"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 1
+    message: "Seller VAT number is invalid: {value}"
+    rule_ref: "R-KSA-10"
+    http_status: 422
+
+  - code: "B-002"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 1
+    message: "Buyer information incomplete for Standard Tax Invoice"
+    rule_ref: "PHZ-004"
+    http_status: 422
+
+  - code: "B-003"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 1
+    message: "Credit/Debit note must reference an original invoice"
+    rule_ref: "R-KSA-03"
+    http_status: 422
+
+  - code: "B-004"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 1
+    message: "Exemption reason code required for VAT category {category}"
+    rule_ref: "R-KSA-09"
+    http_status: 422
+
+  - code: "B-005"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 1
+    message: "Invoice type '{type}' is not allowed for transaction type '{transaction}'"
+    http_status: 422
+
+  - code: "B-006"
+    category: "BUSINESS"
+    severity: "WARN"
+    phase: 1
+    message: "Tax currency differs from invoice currency but no exchange rate provided"
+    rule_ref: "R-KSA-12"
+
+  - code: "B-007"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 1
+    message: "Invoice total must be positive for invoices, negative for credit notes"
+    rule_ref: "CRS-003"
+    http_status: 422
+
+  # ---- Sequence Errors (S) ----
+  - code: "S-001"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Invoice counter value {counter} is not sequential; expected {expected}"
+    rule_ref: "SEQ-001"
+    http_status: 409
+
+  - code: "S-002"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Previous invoice hash does not match actual hash of invoice {counter - 1}"
+    rule_ref: "SEQ-002"
+    http_status: 409
+
+  - code: "S-003"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "First invoice must have empty previous_invoice_hash"
+    rule_ref: "SEQ-003"
+    http_status: 422
+
+  - code: "S-004"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Duplicate invoice UUID: {uuid}"
+    http_status: 409
+
+  - code: "S-005"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Duplicate invoice number: {number}"
+    http_status: 409
+
+  # ---- Cryptographic Errors (C) ----
+  - code: "C-001"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Invoice hash is not a valid SHA-256 hex string"
+    rule_ref: "CRY-001"
+    http_status: 422
+
+  - code: "C-002"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "ECDSA signature verification failed"
+    rule_ref: "CRY-002"
+    http_status: 422
+
+  - code: "C-003"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Public key does not match signing private key"
+    rule_ref: "CRY-003"
+    http_status: 422
+
+  - code: "C-004"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Certificate has expired (notAfter: {expiry})"
+    rule_ref: "CERT-001"
+    http_status: 401
+
+  - code: "C-005"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "Certificate not issued by ZATCA trusted CA"
+    rule_ref: "CERT-002"
+    http_status: 401
+
+  - code: "C-006"
+    category: "SECURITY"
+    severity: "ERROR"
+    phase: 2
+    message: "QR TLV structure is invalid: {detail}"
+    rule_ref: "QR-001 through QR-005"
+    http_status: 422
+
+  # ---- API Errors (A) ----
+  - code: "A-001"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "ZATCA API returned {http_status}: {detail}"
+    http_status: 502
+
+  - code: "A-002"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "Request timeout - ZATCA API did not respond within {timeout}s"
+    http_status: 504
+
+  - code: "A-003"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "Authentication failed: invalid credentials or certificate"
+    http_status: 401
+
+  - code: "A-004"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "Rate limit exceeded; retry after {retry_after}s"
+    http_status: 429
+
+  - code: "A-005"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "Invalid request body: {detail}"
+    http_status: 400
+
+  - code: "A-006"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "Batch size exceeds maximum of {max_batch}"
+    http_status: 422
+
+  - code: "A-007"
+    category: "TECHNICAL"
+    severity: "WARN"
+    phase: 2
+    message: "ZATCA API is in degraded mode; responses may be delayed"
+
+  # ---- Configuration Errors (F) ----
+  - code: "F-001"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "EGS UUID is not configured"
+    http_status: 500
+
+  - code: "F-002"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "Private key file not found or unreadable at path: {path}"
+    http_status: 500
+
+  - code: "F-003"
+    category: "TECHNICAL"
+    severity: "ERROR"
+    phase: 2
+    message: "ZATCA certificate not found or expired"
+    http_status: 500
+
+  # ---- Phase Errors (P) ----
+  - code: "P-001"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 1
+    message: "QR code mandatory for Simplified Tax Invoice in Phase 1"
+    rule_ref: "PHZ-001"
+    http_status: 422
+
+  - code: "P-002"
+    category: "BUSINESS"
+    severity: "ERROR"
+    phase: 2
+    message: "All Phase 2 technical fields must be present: {missing_fields}"
+    rule_ref: "PHZ-002"
+    http_status: 422
+
+# ---------------------------------------------------------------------------
+# Error Response Envelope
+# ---------------------------------------------------------------------------
+response_envelope:
+  type: "json"
+  schema:
+    type: "object"
+    properties:
+      success:
+        type: "boolean"
+      requestID:
+        type: "string"
+        format: "uuid-v4"
+      errors:
+        type: "array"
+        items:
+          type: "object"
+          properties:
+            code: { type: "string" }
+            category: { type: "string" }
+            severity: { type: "string" }
+            message: { type: "string" }
+            field: { type: "string", obligation: "optional" }
+            details: { type: "string", obligation: "optional" }
+      warnings:
+        type: "array"
+        items:
+          type: "object"
+          properties:
+            code: { type: "string" }
+            message: { type: "string" }

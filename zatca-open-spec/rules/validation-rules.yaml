@@ -1,0 +1,506 @@
+# ============================================================================
+# ZATCA Open Specification — Validation Rules Engine
+# Version: 1.0.0
+# Standards: ZATCA XML Implementation Standard vF, KSA VAT Law
+# ============================================================================
+# This file defines ALL validation rules an invoice must pass before
+# submission to ZATCA. Rules are grouped by category and severity.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  rules_count: 48
+  categories:
+    - "Schema Compliance"
+    - "Business Rules (R-KSA)"
+    - "Cryptographic Integrity"
+    - "Sequence Integrity"
+    - "Monetary Consistency"
+
+# ---------------------------------------------------------------------------
+# Rule Definition Structure
+# ---------------------------------------------------------------------------
+# Each rule has:
+#   id:          Unique rule identifier (R-KSA-XXX or TEC-XXX)
+#   phase:       1 | 2
+#   severity:    ERROR | WARN
+#   category:    Rule category
+#   applies_to:  Invoice types this rule applies to
+#   description: Human-readable description
+#   condition:   When the rule should be evaluated (JSON-like expression)
+#   error_code:  Reference to error-codes.yaml
+#   message:     Standardized error message template
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # =========================================================
+  # SECTION 1: Schema Compliance Rules
+  # =========================================================
+  - id: "TEC-001"
+    phase: 1
+    severity: "ERROR"
+    category: "Schema Compliance"
+    applies_to: ["all"]
+    description: "XML must be well-formed and valid against UBL 2.1 schema"
+    validation:
+      type: "schema"
+      schema: "UBL 2.1"
+      checks:
+        - "Well-formedness"
+        - "Namespace correctness"
+        - "Element sequence compliance"
+        - "Data type conformance"
+
+  - id: "TEC-002"
+    phase: 2
+    severity: "ERROR"
+    category: "Schema Compliance"
+    applies_to: ["all"]
+    description: "All mandatory UBL 2.1 elements must be present and non-empty"
+
+  - id: "TEC-003"
+    phase: 1
+    severity: "ERROR"
+    category: "Schema Compliance"
+    applies_to: ["all"]
+    description: "Element content must match the defined type (string, decimal, date, etc.)"
+
+  # =========================================================
+  # SECTION 2: ZATCA Business Rules (R-KSA)
+  # =========================================================
+  - id: "R-KSA-01"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["Standard Tax Invoice"]
+    description: "Fields required for Tax Invoice per VAT Law — must include all mandatory seller, buyer, line item, and monetary total fields"
+
+  - id: "R-KSA-02"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["Simplified Tax Invoice"]
+    description: "Fields required for Simplified Tax Invoice per VAT Law — must include seller info, amount totals, VAT breakdown, and QR code"
+
+  - id: "R-KSA-03"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["CreditNote", "DebitNote"]
+    description: "Fields required for Credit and Debit Notes — must reference original invoice number and UUID"
+
+  - id: "R-KSA-04"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Information on the date the VAT is liable at document level — supply date or issue date must be clearly indicated"
+
+  - id: "R-KSA-05"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Legal registration status of the Seller must be present (VAT number, CRN, legal name)"
+
+  - id: "R-KSA-06"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "VAT treatment per line item must be indicated — taxable, zero-rated, exempt, or out-of-scope"
+    validation:
+      type: "per_line"
+      rule: "Each line item must have a valid VATCategory"
+
+  - id: "R-KSA-07"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Total VAT amount at document level must be present and calculated correctly"
+    validation:
+      type: "formula"
+      rule: "total_vat_amount == sum(tax_totals[].tax_amount)"
+
+  - id: "R-KSA-08"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Total taxable amount per VAT rate at document level must be present"
+    validation:
+      type: "structure"
+      rule: "One TaxTotal entry per unique VAT rate applied"
+
+  - id: "R-KSA-09"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Exemption evidence must be provided when VAT is not charged — exemption reason code and text required for E, Z, O categories"
+    validation:
+      type: "conditional"
+      rule: "If VATCategory in [E, Z, O], then exemption_reason_code and exemption_reason_text must be present"
+
+  - id: "R-KSA-10"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "VAT registration number of Seller (mandatory) and Buyer (conditional) must be valid"
+    validation:
+      type: "format"
+      rule: "KSA VAT: 15 digits, starts with 3, valid check digit"
+
+  - id: "R-KSA-11"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Official address of Seller and Buyer must be present and complete"
+    validation:
+      type: "structure"
+      rule: "Address must include at minimum: street, city, country, postal_zone for seller"
+
+  - id: "R-KSA-12"
+    phase: 1
+    severity: "WARN"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Invoice currency and VAT accounting currency must be specified if different"
+    validation:
+      type: "conditional"
+      rule: "If currency != 'SAR', then tax_currency must be present"
+
+  - id: "R-KSA-13"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Exemption reason codes must be from the valid KSA codes list"
+    validation:
+      type: "enum"
+      ref: "exemption_reason_codes"
+
+  - id: "R-KSA-14"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Sufficient information for auditing — invoice identification, dates, product descriptions, quantities, values, and references"
+    validation:
+      type: "composite"
+      checks:
+        - "Invoice number present"
+        - "Issue date present"
+        - "Line items have description, quantity, unit price"
+        - "Monetary totals present"
+
+  - id: "R-KSA-15"
+    phase: 1
+    severity: "ERROR"
+    category: "Business Rules"
+    applies_to: ["all"]
+    description: "Identification of all parties — legal name and address must be present for Seller and Buyer"
+
+  # =========================================================
+  # SECTION 3: Monetary Consistency Rules
+  # =========================================================
+  - id: "MON-001"
+    phase: 1
+    severity: "ERROR"
+    category: "Monetary Consistency"
+    applies_to: ["all"]
+    description: "line_extension_amount must equal sum of all line_items[].net_amount"
+    validation:
+      type: "formula"
+      rule: "line_extension_amount == sum(line_items[].net_amount)"
+
+  - id: "MON-002"
+    phase: 1
+    severity: "ERROR"
+    category: "Monetary Consistency"
+    applies_to: ["all"]
+    description: "tax_inclusive_amount must equal tax_exclusive_amount + total_vat_amount"
+    validation:
+      type: "formula"
+      rule: "tax_inclusive_amount == tax_exclusive_amount + total_vat_amount"
+
+  - id: "MON-003"
+    phase: 1
+    severity: "ERROR"
+    category: "Monetary Consistency"
+    applies_to: ["all"]
+    description: "Each TaxTotal.tax_amount must equal TaxTotal.taxable_amount × rate"
+    validation:
+      type: "formula"
+      rule: "tax_amount == taxable_amount * tax_category.rate"
+
+  - id: "MON-004"
+    phase: 1
+    severity: "ERROR"
+    category: "Monetary Consistency"
+    applies_to: ["all"]
+    description: "Line item gross_amount must equal net_amount + line tax_amount"
+    validation:
+      type: "per_line"
+      rule: "gross_amount == net_amount + tax_amount"
+
+  - id: "MON-005"
+    phase: 1
+    severity: "ERROR"
+    category: "Monetary Consistency"
+    applies_to: ["all"]
+    description: "All monetary amounts must have exactly 2 decimal places"
+    validation:
+      type: "format"
+      rule: "Decimal places == 2"
+
+  - id: "MON-006"
+    phase: 1
+    severity: "ERROR"
+    category: "Monetary Consistency"
+    applies_to: ["all"]
+    description: "Payable amount must equal tax_inclusive_amount minus prepaid_amount (if prepaid present)"
+    validation:
+      type: "formula"
+      rule: "payable_amount == tax_inclusive_amount - (prepaid_amount ?? 0)"
+
+  # =========================================================
+  # SECTION 4: Cryptographic Integrity Rules
+  # =========================================================
+  - id: "CRY-001"
+    phase: 2
+    severity: "ERROR"
+    category: "Cryptographic Integrity"
+    applies_to: ["all"]
+    description: "Invoice hash must be a valid SHA-256 hex string (64 characters)"
+    validation:
+      type: "format"
+      rule: "Matches /^[a-f0-9]{64}$/"
+
+  - id: "CRY-002"
+    phase: 2
+    severity: "ERROR"
+    category: "Cryptographic Integrity"
+    applies_to: ["all"]
+    description: "Digital signature must be valid ECDSA secp256k1 signature of invoice_hash"
+    validation:
+      type: "crypto"
+      algorithm: "ECDSA"
+      curve: "secp256k1"
+      hash: "SHA-256"
+
+  - id: "CRY-003"
+    phase: 2
+    severity: "ERROR"
+    category: "Cryptographic Integrity"
+    applies_to: ["all"]
+    description: "Public key must match the private key used for signing"
+    validation:
+      type: "crypto"
+      rule: "public_key must be the corresponding public key for the signing private_key"
+
+  - id: "CRY-004"
+    phase: 2
+    severity: "ERROR"
+    category: "Cryptographic Integrity"
+    applies_to: ["all"]
+    description: "QR code TLV tags must produce a valid Base64 string that decodes to correct tag-length-value structure"
+    validation:
+      type: "format"
+      rule: "Valid Base64; decodes to valid TLV with correct tag values"
+
+  # =========================================================
+  # SECTION 5: Sequence Integrity Rules
+  # =========================================================
+  - id: "SEQ-001"
+    phase: 2
+    severity: "ERROR"
+    category: "Sequence Integrity"
+    applies_to: ["all"]
+    description: "invoice_counter_value must be exactly 1 greater than the previous invoice's counter"
+    validation:
+      type: "stateful"
+      rule: "counter must be sequential and monotonic; no gaps, no resets"
+
+  - id: "SEQ-002"
+    phase: 2
+    severity: "ERROR"
+    category: "Sequence Integrity"
+    applies_to: ["all"]
+    description: "previous_invoice_hash must match the SHA-256 hash of the invoice with counter = counter - 1"
+    validation:
+      type: "stateful"
+      rule: "PIH must be the actual hash of the immediately preceding invoice"
+
+  - id: "SEQ-003"
+    phase: 2
+    severity: "ERROR"
+    category: "Sequence Integrity"
+    applies_to: ["all"]
+    description: "The first invoice (counter = 1) MUST have previous_invoice_hash = null/empty"
+    validation:
+      type: "conditional"
+      rule: "If invoice_counter_value == 1, previous_invoice_hash must be absent or null"
+
+  # =========================================================
+  # SECTION 6: Phase-Specific Rules
+  # =========================================================
+  - id: "PHZ-001"
+    phase: 1
+    severity: "ERROR"
+    category: "Phase Compliance"
+    applies_to: ["Simplified Tax Invoice"]
+    description: "QR code must be present on all Simplified Tax Invoices in Phase 1"
+    validation:
+      type: "presence"
+      field: "qr_code"
+
+  - id: "PHZ-002"
+    phase: 2
+    severity: "ERROR"
+    category: "Phase Compliance"
+    applies_to: ["all"]
+    description: "All Phase 2 technical fields must be present: invoice_hash, digital_signature, public_key, digital_signature_type, egs_uuid, invoice_counter_value"
+    validation:
+      type: "presence"
+      fields:
+        - "invoice_hash"
+        - "digital_signature"
+        - "public_key"
+        - "digital_signature_type"
+        - "egs_uuid"
+        - "invoice_counter_value"
+
+  - id: "PHZ-003"
+    phase: 2
+    severity: "ERROR"
+    category: "Phase Compliance"
+    applies_to: ["all"]
+    description: "Previous invoice hash must be present for all invoices with counter > 1"
+
+  - id: "PHZ-004"
+    phase: 1
+    severity: "ERROR"
+    category: "Phase Compliance"
+    applies_to: ["Standard Tax Invoice"]
+    description: "Buyer information (name, VAT number, address) is mandatory for Standard Tax Invoices"
+
+  # =========================================================
+  # SECTION 7: Data Format Rules
+  # =========================================================
+  - id: "FMT-001"
+    phase: 1
+    severity: "ERROR"
+    category: "Data Format"
+    applies_to: ["all"]
+    description: "UUID must be in valid UUID v4 format"
+    validation:
+      type: "regex"
+      pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+
+  - id: "FMT-002"
+    phase: 1
+    severity: "ERROR"
+    category: "Data Format"
+    applies_to: ["all"]
+    description: "Dates must be in ISO 8601 format with timezone"
+    validation:
+      type: "regex"
+      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+
+  - id: "FMT-003"
+    phase: 1
+    severity: "ERROR"
+    category: "Data Format"
+    applies_to: ["all"]
+    description: "KSA VAT number must be 15 digits starting with 3"
+    validation:
+      type: "regex"
+      pattern: "^3\\d{14}$"
+
+  - id: "FMT-004"
+    phase: 1
+    severity: "ERROR"
+    category: "Data Format"
+    applies_to: ["all"]
+    description: "Currency must be a valid ISO 4217 alpha-3 code"
+    validation:
+      type: "enum"
+      ref: "ISO 4217"
+
+  # =========================================================
+  # SECTION 8: Document-Level Cross-Field Rules
+  # =========================================================
+  - id: "CRS-001"
+    phase: 1
+    severity: "ERROR"
+    category: "Cross-Field"
+    applies_to: ["CreditNote", "DebitNote"]
+    description: "Credit and Debit notes must have a valid billing_reference to the original invoice"
+    validation:
+      type: "presence"
+      field: "billing_reference"
+
+  - id: "CRS-002"
+    phase: 1
+    severity: "WARN"
+    category: "Cross-Field"
+    applies_to: ["all"]
+    description: "If tax_currency differs from currency, exchange rate should be documented"
+
+  - id: "CRS-003"
+    phase: 1
+    severity: "WARN"
+    category: "Cross-Field"
+    applies_to: ["all"]
+    description: "Invoice total (tax_inclusive_amount) must be positive for invoices; negative for credit notes"
+    validation:
+      type: "conditional"
+      rule: "If transaction_type == 01 (Invoice), total > 0; If transaction_type == 02 (Credit Note), total < 0"
+
+  - id: "CRS-004"
+    phase: 1
+    severity: "ERROR"
+    category: "Cross-Field"
+    applies_to: ["all"]
+    description: "All line items must use quantity > 0"
+    validation:
+      type: "per_line"
+      rule: "quantity > 0"
+
+# ---------------------------------------------------------------------------
+# Exemption Reason Codes
+# ---------------------------------------------------------------------------
+exemption_reason_codes:
+  description: "Valid KSA VAT exemption reason codes"
+  values:
+    - { code: "VATEX-KSA-01", description: "Financial services" }
+    - { code: "VATEX-KSA-02", description: "Life insurance" }
+    - { code: "VATEX-KSA-03", description: "Residential properties" }
+    - { code: "VATEX-KSA-04", description: "Supply of land" }
+    - { code: "VATEX-KSA-05", description: "Export of goods" }
+    - { code: "VATEX-KSA-06", description: "International transport" }
+    - { code: "VATEX-KSA-07", description: "Qualifying metals" }
+    - { code: "VATEX-KSA-08", description: "Healthcare services" }
+    - { code: "VATEX-KSA-09", description: "Education services" }
+    - { code: "VATEX-KSA-10", description: "Other exempt supply" }
+
+# ---------------------------------------------------------------------------
+# Validation Engine Behavior
+# ---------------------------------------------------------------------------
+engine:
+  modes:
+    - "fail_fast"
+    - "collect_all"
+  default_mode: "collect_all"
+  description: >
+    In 'collect_all' mode, ALL rules are evaluated and ALL errors are reported.
+    In 'fail_fast' mode, validation stops at the first ERROR.
+
+  severity_levels:
+    - ERROR: "Invoice MUST NOT be submitted. Blocking."
+    - WARN: "Invoice may be submitted but should be reviewed."

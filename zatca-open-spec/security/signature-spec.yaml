@@ -1,0 +1,154 @@
+# ============================================================================
+# ZATCA Open Specification — Digital Signature Specification
+# Version: 1.0.0
+# Standards: ECDSA secp256k1, SHA-256, XAdES EPES v1.3.2
+# ============================================================================
+# Defines the digital signature process for ZATCA e-invoices.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  algorithms:
+    signing: "ECDSA"
+    curve: "secp256k1"
+    hash: "SHA-256"
+    signature_standard: "XAdES EPES v1.3.2"
+    key_size: 256
+
+# ---------------------------------------------------------------------------
+# Key Generation
+# ---------------------------------------------------------------------------
+key_generation:
+  algorithm: "ECDSA"
+  curve: "secp256k1"
+  key_size: "256 bits"
+
+  private_key:
+    format: "PEM"
+    encoding: "PKCS#8"
+    encryption: "AES-256-CBC (optional, for storage)"
+    constraints:
+      - "Must be generated using a CSPRNG"
+      - "Must be stored securely with restricted access"
+      - "Must never be transmitted to ZATCA"
+
+  public_key:
+    format: "PEM"
+    encoding: "SubjectPublicKeyInfo (SPKI)"
+    compression: "Uncompressed (04 || X || Y) for CSR"
+    constraints:
+      - "Derived from private key"
+      - "Included in CSR for ZATCA certificate request"
+
+# ---------------------------------------------------------------------------
+# Signing Process
+# ---------------------------------------------------------------------------
+signing:
+  description: "The complete process for signing a ZATCA invoice (Phase 2)"
+
+  steps:
+    - step: 1
+      name: "Build UBL 2.1 XML"
+      action: "Generate the full UBL 2.1 XML invoice document"
+      output: "ubl_invoice.xml (pre-canonicalization)"
+
+    - step: 2
+      name: "Canonicalize XML"
+      action: "Apply XML canonicalization (C14N Exclusive) to produce a deterministic byte stream"
+      algorithm: "Exclusive XML Canonicalization 1.0 (http://www.w3.org/2001/10/xml-exc-c14n#)"
+      output: "canonicalized_bytes"
+
+    - step: 3
+      name: "Hash invoice"
+      action: "Compute SHA-256 hash of the canonicalized XML bytes"
+      algorithm: "SHA-256"
+      encoding: "Hex"
+      output: "invoice_hash (64 hex chars)"
+
+    - step: 4
+      name: "Create signature"
+      action: "Sign invoice_hash with ECDSA secp256k1 private key"
+      algorithm: "ECDSA"
+      curve: "secp256k1"
+      signature_encoding: "DER (ASN.1)"
+      output: "digital_signature (DER-encoded, then Base64 for TLV)"
+
+    - step: 5
+      name: "Generate XAdES"
+      action: "Embed the signature into XAdES EPES v1.3.2 envelope around the invoice XML"
+      standard: "XAdES EPES v1.3.2"
+      output: "signed_invoice.xml (includes XAdES signature)"
+
+    - step: 6
+      name: "Compute PIH"
+      action: "Compute SHA-256 hash of the canonicalized signed XML (for next invoice)"
+      algorithm: "SHA-256"
+      output: "previous_invoice_hash (for the next invoice in sequence)"
+
+    - step: 7
+      name: "Generate QR (Phase 2)"
+      action: "Build 9-tag TLV QR code with tags 6-8 containing hash, signature, public key"
+      ref: "../security/qr-spec.yaml"
+      output: "qr_base64"
+
+# ---------------------------------------------------------------------------
+# Hash Chaining
+# ---------------------------------------------------------------------------
+hash_chaining:
+  description: "Blockchain-style hash chain linking invoices in sequence"
+
+  structure:
+    invoice_N:
+      previous_invoice_hash: "SHA-256(signed_invoice_{N-1})"
+      current_hash: "SHA-256(signed_invoice_N)"
+
+  rules:
+    - "First invoice (N=1): previous_invoice_hash = null"
+    - "Subsequent invoices: previous_invoice_hash must match current_hash of N-1"
+    - "Hash is computed on the canonicalized signed XML (AFTER XAdES embedding)"
+    - "The hash chain is per-EGS (each EGS maintains its own independent chain)"
+
+  tamper_evidence:
+    description: "If any invoice in the chain is modified, all subsequent PIH validations fail"
+
+# ---------------------------------------------------------------------------
+# XAdES EPES Specification
+# ---------------------------------------------------------------------------
+xades:
+  standard: "XAdES EPES v1.3.2"
+  profile: "EPES (Explicit Policy-based Electronic Signature)"
+
+  signature_properties:
+    - name: "SigningTime"
+      obligation: "mandatory"
+      value: "Invoice issue date/time"
+
+    - name: "SigningCertificate"
+      obligation: "mandatory"
+      value: "ZATCA compliance certificate (CSID)"
+
+    - name: "SignaturePolicyIdentifier"
+      obligation: "mandatory"
+      value:
+        identifier: "http://www.zatca.gov.sa/e-invoicing/signature-policy"
+        description: "ZATCA E-Invoicing Signature Policy"
+
+    - name: "SignerRole"
+      obligation: "optional"
+      value: "Supplier"
+
+  signature_location:
+    description: "XAdES signature is embedded in the UBL XML document"
+    xpath: "//sac:Signature"
+    wrapping: "The signature envelops the original invoice XML"
+
+# ---------------------------------------------------------------------------
+# Supported Signature Types (Tag 9 values)
+# ---------------------------------------------------------------------------
+supported_signature_types:
+  - code: "XADES_EPES_v1.3.2"
+    description: "XAdES EPES v1.3.2 — the current ZATCA standard"
+    status: "active"
+  - code: "XADES_BES_v1.3.2"
+    description: "XAdES BES v1.3.2 — base profile without policy"
+    status: "deprecated"

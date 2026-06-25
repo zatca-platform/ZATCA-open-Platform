@@ -1,0 +1,136 @@
+# ============================================================================
+# ZATCA Open Specification — Example: Standard Tax Invoice (B2B)
+# Version: 1.0.0
+# ============================================================================
+# A complete standard tax invoice example compliant with Phase 2.
+# Includes full buyer information, multiple VAT rates, discounts.
+# ============================================================================
+
+meta:
+  example_type: "Standard Tax Invoice"
+  phase: 2
+  transaction_type: "Invoice"
+  description: "B2B supply of IT equipment and services with mixed VAT rates"
+
+invoice:
+  uuid: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+  invoice_number: "INV-STD-2026-0042"
+  invoice_counter_value: 42
+  previous_invoice_hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  invoice_type: "01"
+  transaction_type: "01"
+  issue_date: "2026-06-24T14:30:00+03:00"
+  supply_date: "2026-06-20T09:00:00+03:00"
+  currency: "SAR"
+
+  seller:
+    type: "seller"
+    legal_name: "شركة الحلول المتكاملة"
+    vat_registration_number: "398765432109876"
+    crn_number: "9876543210"
+    address:
+      street_name: "King Fahd Road"
+      building_number: "7890"
+      city: "Jeddah"
+      city_subdivision: "Al Shati"
+      postal_zone: "23415"
+      country_code: "SA"
+
+  buyer:
+    type: "buyer"
+    legal_name: "شركة البيت الحديث للتجارة"
+    vat_registration_number: "355555555555555"
+    address:
+      street_name: "Al Madinah Road"
+      building_number: "1234"
+      city: "Jeddah"
+      city_subdivision: "Al Faisaliyah"
+      postal_zone: "23422"
+      country_code: "SA"
+
+  line_extension_amount: 50000.00
+  tax_exclusive_amount: 47000.00
+  total_allowance_amount: 3000.00
+  total_vat_amount: 7050.00
+  tax_inclusive_amount: 54050.00
+
+  document_allowances:
+    - charge_indicator: false
+      reason_code: "03"
+      reason_text: "Volume discount - 6%"
+      amount: 3000.00
+      base_amount: 50000.00
+      percentage: 6.0
+
+  tax_totals:
+    - tax_category:
+        id: "S"
+        rate: 0.15
+      taxable_amount: 42000.00
+      tax_amount: 6300.00
+      currency: "SAR"
+    - tax_category:
+        id: "Z"
+        rate: 0.00
+        exemption_reason_code: "VATEX-KSA-05"
+        exemption_reason_text: "Export of goods"
+      taxable_amount: 5000.00
+      tax_amount: 0.00
+      currency: "SAR"
+
+  line_items:
+    - line_number: 1
+      product_code: "SRV-001"
+      description: "استشارات تقنية - تطوير بنية تحتية"
+      quantity: 1
+      unit_code: "LS"
+      unit_price: 30000.00
+      net_amount: 30000.00
+      tax_category:
+        id: "S"
+        rate: 0.15
+      tax_amount: 4500.00
+      gross_amount: 34500.00
+
+    - line_number: 2
+      product_code: "HW-042"
+      description: "خوادم تخزين متطورة (موديل 2026)"
+      quantity: 5
+      unit_code: "EA"
+      unit_price: 4000.00
+      net_amount: 20000.00
+      tax_category:
+        id: "S"
+        rate: 0.15
+      tax_amount: 3000.00
+      gross_amount: 23000.00
+
+    - line_number: 3
+      product_code: "EXP-INTL"
+      description: "شحن دولي - معدات"
+      quantity: 1
+      unit_code: "LS"
+      unit_price: 5000.00
+      net_amount: 5000.00
+      tax_category:
+        id: "Z"
+        rate: 0.00
+        exemption_reason_code: "VATEX-KSA-05"
+        exemption_reason_text: "Export of goods"
+      tax_amount: 0.00
+      gross_amount: 5000.00
+
+  payment_means: "20"
+  payment_terms: "Net 30 days from invoice date"
+  due_date: "2026-07-24T00:00:00+03:00"
+  purchase_order_reference: "PO-2026-0888"
+  notes:
+    - "يتضمن خصم كمية بنسبة 6%"
+    - "الشحن الدولي معفى من الضريبة"
+
+  egs_uuid: "e5f6a1b2-c3d4-7890-abcd-ef1234567890"
+  invoice_hash: "1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777aaaa8888bbbb"
+  digital_signature: "MEQCIC2..."
+  digital_signature_type: "XADES_EPES_v1.3.2"
+  public_key: "MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE..."
+  qr_code: "AQID...Base64TLV..."

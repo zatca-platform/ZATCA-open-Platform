@@ -1,0 +1,95 @@
+# ============================================================================
+# ZATCA Open Specification — Domain Events
+# Version: 1.0.0
+# ============================================================================
+# Defines events fired during the invoice lifecycle.
+# These are implementation-agnostic; SDKs map these to their event systems.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  events_count: 6
+
+# ---------------------------------------------------------------------------
+# Event Definitions
+# ---------------------------------------------------------------------------
+events:
+
+  - name: "InvoiceSigned"
+    description: "Invoice has been locally signed with ECDSA and XAdES"
+    phase: 2
+    data:
+      - "invoice_uuid"
+      - "invoice_number"
+      - "invoice_hash"
+      - "qr_code"
+    audience: ["Internal"]
+
+  - name: "InvoiceSubmitted"
+    description: "Invoice has been submitted to ZATCA for clearance or reporting"
+    phase: 2
+    data:
+      - "invoice_uuid"
+      - "invoice_number"
+      - "submission_type": "clearance | reporting"
+      - "zarca_request_id"
+      - "submitted_at"
+    audience: ["Internal"]
+
+  - name: "InvoiceCleared"
+    description: "Invoice successfully cleared by ZATCA (Standard invoices, production)"
+    phase: 2
+    data:
+      - "invoice_uuid"
+      - "invoice_number"
+      - "clearance_status"
+      - "cryptographic_stamp"
+      - "cleared_timestamp"
+      - "compliance_result_dto"
+    audience: ["Internal", "Buyer"]
+
+  - name: "InvoiceReported"
+    description: "Invoice successfully reported to ZATCA (Simplified invoices)"
+    phase: 2
+    data:
+      - "invoice_uuid"
+      - "invoice_number"
+      - "reporting_status"
+      - "reported_timestamp"
+      - "compliance_result_dto"
+    audience: ["Internal", "Buyer"]
+
+  - name: "InvoiceFailed"
+    description: "Invoice submission to ZATCA failed"
+    phase: 2
+    data:
+      - "invoice_uuid"
+      - "invoice_number"
+      - "error_category": "validation | api | network"
+      - "error_messages": ["string"]
+      - "zarca_error_code"
+      - "failed_at"
+    audience: ["Internal"]
+    suggested_actions:
+      - "Log error details"
+      - "Notify admin"
+      - "Begin retry or correction flow"
+
+  - name: "InvoiceSynchronized"
+    description: "Offline invoice successfully synced to ZATCA"
+    phase: 2
+    data:
+      - "invoice_uuid"
+      - "invoice_number"
+      - "sync_result": "cleared | reported | failed"
+    audience: ["Internal"]
+
+# ---------------------------------------------------------------------------
+# Event Handling Guidelines
+# ---------------------------------------------------------------------------
+guidelines:
+  - "All events are fire-and-forget (asynchronous)"
+  - "Events must not block the main invoice processing flow"
+  - "Event payloads must not contain secrets (private keys, secrets)"
+  - "SDKs should implement event listeners/hooks for each event"
+  - "Default behavior: log event with trace_id; SDK users can attach custom listeners"

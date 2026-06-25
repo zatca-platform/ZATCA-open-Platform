@@ -1,0 +1,711 @@
+# ============================================================================
+# ZATCA Open Specification — Invoice Domain Model
+# Version: 1.0.0
+# Standards: UBL 2.1, ZATCA E-Invoice XML Implementation Standard vF (2023-05-19)
+# ============================================================================
+# Defines the canonical invoice model covering:
+#   - Simplified Tax Invoice (B2C)
+#   - Standard Tax Invoice (B2B)
+#   - Credit Note
+#   - Debit Note
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  model: "Invoice"
+  domain: "ZATCA E-Invoicing"
+  standards:
+    - "UBL 2.1"
+    - "ZATCA XML Implementation Standard 2023"
+    - "ISO 4217"
+    - "ISO 3166-1"
+    - "ISO 8601"
+
+# ---------------------------------------------------------------------------
+# Enumerations
+# ---------------------------------------------------------------------------
+enums:
+
+  InvoiceType:
+    description: "Type of invoice document per ZATCA classification"
+    values:
+      - { code: "01", name: "Tax Invoice", description: "Standard tax invoice (B2B)" }
+      - { code: "02", name: "Simplified Tax Invoice", description: "Simplified invoice (B2C)" }
+      - { code: "03", name: "Tax Invoice (Self-Billed)", description: "Self-billed standard invoice" }
+      - { code: "04", name: "Simplified Tax Invoice (Self-Billed)", description: "Self-billed simplified invoice" }
+      - { code: "05", name: "Tax Invoice (Nominal)", description: "Nominal standard invoice" }
+
+  TransactionType:
+    description: "Nature of the transaction"
+    values:
+      - { code: "01", name: "Invoice" }
+      - { code: "02", name: "Credit Note" }
+      - { code: "03", name: "Debit Note" }
+
+  InvoiceStatus:
+    description: "Current lifecycle status of the invoice"
+    values:
+      - "Draft"
+      - "Signed"
+      - "Reported"
+      - "PendingClearance"
+      - "Cleared"
+      - "Failed"
+      - "Cancelled"
+
+  VATCategory:
+    description: "VAT category codes per KSA VAT Law"
+    values:
+      - { code: "S", name: "Standard Rate", rate: 0.15 }
+      - { code: "Z", name: "Zero Rated", rate: 0.00 }
+      - { code: "E", name: "Exempt", rate: 0.00 }
+      - { code: "O", name: "Out of Scope", rate: null }
+      - { code: "K", name: "VAT Reverse Charge", rate: null }
+
+  PaymentMeans:
+    description: "Payment method codes"
+    values:
+      - { code: "01", name: "Cash" }
+      - { code: "03", name: "Cheque" }
+      - { code: "10", name: "Credit Card" }
+      - { code: "20", name: "Bank Transfer" }
+      - { code: "30", name: "Debit Card" }
+      - { code: "42", name: "Digital Wallet" }
+      - { code: "97", name: "Other" }
+
+  AllowanceChargeReason:
+    description: "Reason codes for allowances and charges"
+    values:
+      - { code: "01", name: "Promotion Discount" }
+      - { code: "02", name: "Early Payment Discount" }
+      - { code: "03", name: "Volume Discount" }
+      - { code: "04", name: "Loyalty Discount" }
+      - { code: "05", name: "Shipping Charge" }
+      - { code: "99", name: "Other" }
+
+# ---------------------------------------------------------------------------
+# Invoice Model
+# ---------------------------------------------------------------------------
+invoice:
+
+  fields:
+
+    # --- Identification ---
+    - name: "uuid"
+      type: "string"
+      format: "uuid-v4"
+      phase: 2
+      obligation: "mandatory"
+      description: "Universally Unique Invoice Identifier (UUID v4)"
+      example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+    - name: "invoice_number"
+      type: "string"
+      phase: 1
+      obligation: "mandatory"
+      description: "Unique sequential invoice number assigned by the seller (IRN-equivalent)"
+      constraints:
+        - "Must be unique per EGS"
+        - "Must be sequential; gaps must be explainable"
+        - "Max length: 256 characters"
+      example: "INV-2026-0001234"
+
+    - name: "invoice_counter_value"
+      type: "integer"
+      phase: 2
+      obligation: "mandatory"
+      description: "Tamper-resistant sequential invoice counter, monotonically increasing per EGS"
+      constraints:
+        - "Must start at 1"
+        - "Must increment by 1 per invoice"
+        - "Must NEVER reset or decrement"
+        - "Persisted in tamper-resistant storage"
+
+    - name: "previous_invoice_hash"
+      type: "string"
+      format: "hex"
+      phase: 2
+      obligation: "conditional"
+      description: "SHA-256 hash of the previous invoice in the sequence; null for first invoice"
+      constraints:
+        - "SHA-256 hex encoded (64 characters)"
+        - "Must match hash of preceding invoice_counter_value - 1"
+
+    - name: "invoice_type"
+      type: "enum"
+      ref: "InvoiceType"
+      phase: 1
+      obligation: "mandatory"
+      description: "Classification of the invoice document"
+
+    - name: "transaction_type"
+      type: "enum"
+      ref: "TransactionType"
+      phase: 1
+      obligation: "mandatory"
+      description: "Nature of the transaction (Invoice, Credit Note, Debit Note)"
+
+    # --- Dates & Times ---
+    - name: "issue_date"
+      type: "datetime"
+      format: "ISO 8601"
+      phase: 1
+      obligation: "mandatory"
+      description: "Date and time the invoice was issued"
+      constraints:
+        - "Must be in ZATCA timezone (Arabia Standard Time, UTC+3) or include UTC offset"
+        - "Must not be in the future beyond 24-hour tolerance"
+
+    - name: "supply_date"
+      type: "datetime"
+      format: "ISO 8601"
+      phase: 1
+      obligation: "conditional"
+      description: "Date of supply / goods delivery; required if different from issue_date"
+      constraints:
+        - "Must be ≤ issue_date"
+
+    # --- Document References ---
+    - name: "billing_reference"
+      type: "BillingReference"
+      phase: 1
+      obligation: "conditional"
+      description: "Reference to original invoice for Credit/Debit notes"
+      meta:
+        required_if:
+          - { field: "transaction_type", in: ["02", "03"] }
+
+    - name: "purchase_order_reference"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Customer purchase order reference"
+      constraints:
+        - "Max length: 256"
+
+    - name: "contract_reference"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Contract reference number"
+      constraints:
+        - "Max length: 256"
+
+    - name: "additional_document_references"
+      type: "array"
+      item_type: "DocumentReference"
+      phase: 1
+      obligation: "optional"
+      description: "Additional supporting document references"
+
+    # --- Parties ---
+    - name: "seller"
+      type: "Party"
+      ref: "../models/party.yaml#/Party"
+      phase: 1
+      obligation: "mandatory"
+      description: "The seller/supplier issuing the invoice"
+
+    - name: "buyer"
+      type: "Party"
+      ref: "../models/party.yaml#/Party"
+      phase: 1
+      obligation: "conditional"
+      description: "The buyer/customer; mandatory for Standard invoices (B2B), conditional for Simplified (B2C)"
+      meta:
+        required_if:
+          - { field: "invoice_type", in: ["01", "03", "05"] }
+
+    - name: "payee"
+      type: "Party"
+      ref: "../models/party.yaml#/Party"
+      phase: 1
+      obligation: "optional"
+      description: "Party to receive payment (if different from seller)"
+
+    - name: "delivery_party"
+      type: "Party"
+      ref: "../models/party.yaml#/Party"
+      phase: 1
+      obligation: "optional"
+      description: "Party to whom goods are delivered"
+
+    # --- Monetary Totals ---
+    - name: "currency"
+      type: "string"
+      format: "ISO 4217"
+      phase: 1
+      obligation: "mandatory"
+      description: "Invoice currency code"
+      default: "SAR"
+      constraints:
+        - "Must be a valid ISO 4217 alpha-3 code"
+
+    - name: "tax_currency"
+      type: "string"
+      format: "ISO 4217"
+      phase: 1
+      obligation: "conditional"
+      description: "VAT accounting currency if different from invoice currency"
+      meta:
+        required_if:
+          - { field: "currency", neq: "SAR" }
+
+    - name: "line_extension_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "mandatory"
+      description: "Sum of all line item net amounts (before allowances/charges)"
+      constraints:
+        - "Precision: 2 decimal places"
+        - "Must equal sum of line_items[].net_amount"
+
+    - name: "tax_exclusive_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "mandatory"
+      description: "Total amount exclusive of VAT (line total + allowances - charges)"
+      constraints:
+        - "Precision: 2 decimal places"
+
+    - name: "tax_inclusive_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "mandatory"
+      description: "Total amount inclusive of VAT (grand total)"
+      constraints:
+        - "Precision: 2 decimal places"
+        - "Must equal tax_exclusive_amount + total_vat_amount"
+
+    - name: "total_allowance_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "conditional"
+      description: "Sum of all document-level allowances"
+      constraints:
+        - "Precision: 2 decimal places"
+
+    - name: "total_charge_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "conditional"
+      description: "Sum of all document-level charges"
+      constraints:
+        - "Precision: 2 decimal places"
+
+    - name: "prepaid_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "optional"
+      description: "Amount already paid (advance payment)"
+      constraints:
+        - "Precision: 2 decimal places"
+
+    - name: "payable_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "conditional"
+      description: "Net payable amount after prepayments"
+      constraints:
+        - "Precision: 2 decimal places"
+        - "Must equal tax_inclusive_amount - prepaid_amount"
+
+    # --- Tax Totals ---
+    - name: "tax_totals"
+      type: "array"
+      item_type: "TaxTotal"
+      phase: 1
+      obligation: "mandatory"
+      description: "VAT totals per tax rate, plus grand VAT total"
+      constraints:
+        - "At least one entry per VAT rate applied"
+
+    - name: "total_vat_amount"
+      type: "decimal"
+      phase: 1
+      obligation: "mandatory"
+      description: "Sum of all VAT amounts across all tax totals"
+      constraints:
+        - "Precision: 2 decimal places"
+        - "Must equal sum of tax_totals[].tax_amount"
+
+    # --- Line Items ---
+    - name: "line_items"
+      type: "array"
+      item_type: "LineItem"
+      phase: 1
+      obligation: "mandatory"
+      description: "Invoice line items (goods/services)"
+      constraints:
+        - "At least 1 line item"
+        - "Max items: implementation-defined (recommended: no limit)"
+
+    # --- Allowances & Charges (Document Level) ---
+    - name: "document_allowances"
+      type: "array"
+      item_type: "AllowanceCharge"
+      phase: 1
+      obligation: "optional"
+      description: "Document-level allowances (discounts)"
+
+    - name: "document_charges"
+      type: "array"
+      item_type: "AllowanceCharge"
+      phase: 1
+      obligation: "optional"
+      description: "Document-level charges (surcharges)"
+
+    # --- Payment & Terms ---
+    - name: "payment_means"
+      type: "enum"
+      ref: "PaymentMeans"
+      phase: 1
+      obligation: "optional"
+      description: "Method of payment"
+
+    - name: "payment_terms"
+      type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Free-text payment terms"
+      constraints:
+        - "Max length: 1024"
+
+    - name: "due_date"
+      type: "datetime"
+      format: "ISO 8601"
+      phase: 1
+      obligation: "optional"
+      description: "Payment due date"
+
+    # --- Notes ---
+    - name: "notes"
+      type: "array"
+      item_type: "string"
+      phase: 1
+      obligation: "optional"
+      description: "Additional notes / remarks"
+      constraints:
+        - "Max 20 entries"
+        - "Each entry max 512 characters"
+
+    # --- Phase 2 Technical Fields ---
+    - name: "egs_uuid"
+      type: "string"
+      format: "uuid-v4"
+      phase: 2
+      obligation: "mandatory"
+      description: "UUID of the compliant E-Invoice Generation Solution (EGS)"
+
+    - name: "invoice_hash"
+      type: "string"
+      format: "hex"
+      phase: 2
+      obligation: "mandatory"
+      description: "SHA-256 hash of the signed invoice XML (canonicalized)"
+      constraints:
+        - "SHA-256 hex encoded (64 characters)"
+        - "Generated AFTER XML canonicalization"
+
+    - name: "digital_signature"
+      type: "string"
+      format: "base64"
+      phase: 2
+      obligation: "mandatory"
+      description: "ECDSA secp256k1 digital signature of the invoice hash"
+      constraints:
+        - "Base64 encoded DER-encoded signature"
+
+    - name: "digital_signature_type"
+      type: "string"
+      phase: 2
+      obligation: "mandatory"
+      description: "Signature standard used"
+      default: "XADES_EPES_v1.3.2"
+
+    - name: "public_key"
+      type: "string"
+      format: "base64"
+      phase: 2
+      obligation: "mandatory"
+      description: "ECDSA secp256k1 public key of the seller (Base64 encoded)"
+
+    - name: "cryptographic_stamp"
+      type: "string"
+      format: "base64"
+      phase: 2
+      obligation: "mandatory"
+      description: "Cryptographic stamp returned by ZATCA after clearance"
+
+    - name: "qr_code"
+      type: "string"
+      format: "base64"
+      phase: 1
+      obligation: "conditional"
+      description: "Base64-encoded TLV QR code; mandatory for Simplified invoices from Phase 1"
+      meta:
+        mandatory_for: ["Simplified Tax Invoice"]
+
+    # --- Credit/Debit Note Specific ---
+    - name: "credit_note_reason"
+      type: "string"
+      phase: 1
+      obligation: "conditional"
+      description: "Reason for credit note"
+      meta:
+        required_if:
+          - { field: "transaction_type", eq: "02" }
+
+    - name: "debit_note_reason"
+      type: "string"
+      phase: 1
+      obligation: "conditional"
+      description: "Reason for debit note"
+      meta:
+        required_if:
+          - { field: "transaction_type", eq: "03" }
+
+# ---------------------------------------------------------------------------
+# Sub-types
+# ---------------------------------------------------------------------------
+sub_types:
+
+  BillingReference:
+    description: "Reference to a source document (original invoice for credit/debit notes)"
+    fields:
+      - name: "document_type"
+        type: "string"
+        obligation: "mandatory"
+        description: "Type of referenced document"
+        values: ["Invoice", "CreditNote", "DebitNote"]
+      - name: "document_number"
+        type: "string"
+        obligation: "mandatory"
+        description: "Document number of the referenced invoice"
+      - name: "uuid"
+        type: "string"
+        format: "uuid-v4"
+        obligation: "conditional"
+        description: "UUID of the referenced invoice (Phase 2)"
+
+  DocumentReference:
+    description: "Reference to an external supporting document"
+    fields:
+      - name: "id"
+        type: "string"
+        obligation: "mandatory"
+      - name: "document_type"
+        type: "string"
+        obligation: "optional"
+      - name: "attachment_url"
+        type: "string"
+        format: "uri"
+        obligation: "optional"
+
+  LineItem:
+    description: "Individual line item on an invoice"
+    fields:
+      - name: "line_number"
+        type: "integer"
+        obligation: "mandatory"
+        description: "Sequential line number (1-based)"
+
+      - name: "product_code"
+        type: "string"
+        obligation: "conditional"
+        description: "Seller's product/SKU code"
+
+      - name: "global_id"
+        type: "string"
+        obligation: "optional"
+        description: "GTIN or other global product identifier"
+
+      - name: "description"
+        type: "string"
+        obligation: "mandatory"
+        description: "Description of goods/services"
+        constraints:
+          - "Max length: 512"
+
+      - name: "quantity"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "Quantity of units"
+        constraints:
+          - "Must be > 0"
+
+      - name: "unit_code"
+        type: "string"
+        obligation: "conditional"
+        description: "Unit of measure code (UN/ECE REC 20)"
+        default: "EA"
+
+      - name: "unit_price"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "Price per unit (exclusive of VAT)"
+        constraints:
+          - "Precision: up to 10 decimal places"
+
+      - name: "net_amount"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "quantity × unit_price (before line-level allowances/charges)"
+        constraints:
+          - "Precision: 2 decimal places"
+
+      - name: "allowances"
+        type: "array"
+        item_type: "AllowanceCharge"
+        obligation: "optional"
+        description: "Line-level allowances"
+
+      - name: "charges"
+        type: "array"
+        item_type: "AllowanceCharge"
+        obligation: "optional"
+        description: "Line-level charges"
+
+      - name: "tax_category"
+        type: "object"
+        ref: "TaxCategory"
+        obligation: "mandatory"
+        description: "VAT category and rate for this line"
+
+      - name: "tax_amount"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "VAT amount for this line"
+        constraints:
+          - "Precision: 2 decimal places"
+
+      - name: "gross_amount"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "net_amount + tax_amount"
+        constraints:
+          - "Precision: 2 decimal places"
+
+      - name: "notes"
+        type: "string"
+        obligation: "optional"
+        description: "Line-level notes"
+
+  TaxTotal:
+    description: "VAT totals grouped by tax rate"
+    fields:
+      - name: "tax_category"
+        type: "object"
+        ref: "TaxCategory"
+        obligation: "mandatory"
+
+      - name: "taxable_amount"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "Sum of line amounts subject to this VAT rate"
+        constraints:
+          - "Precision: 2 decimal places"
+
+      - name: "tax_amount"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "VAT amount for this rate: taxable_amount × rate"
+        constraints:
+          - "Precision: 2 decimal places"
+
+      - name: "currency"
+        type: "string"
+        format: "ISO 4217"
+        obligation: "mandatory"
+        default: "SAR"
+
+  TaxCategory:
+    description: "VAT category and rate specification"
+    fields:
+      - name: "id"
+        type: "enum"
+        ref: "VATCategory"
+        obligation: "mandatory"
+        description: "VAT category code"
+
+      - name: "rate"
+        type: "decimal"
+        obligation: "conditional"
+        description: "Tax rate as decimal (e.g., 0.15 for 15%); required for S, Z"
+        constraints:
+          - "Must match the rate defined in VATCategory for the given id"
+
+      - name: "exemption_reason_code"
+        type: "string"
+        obligation: "conditional"
+        description: "Exemption reason code; required when id = E, Z, O"
+        constraints:
+          - "Must be a valid KSA exemption code"
+
+      - name: "exemption_reason_text"
+        type: "string"
+        obligation: "conditional"
+        description: "Free-text explanation of exemption reason"
+
+      - name: "tax_scheme_id"
+        type: "string"
+        obligation: "conditional"
+        default: "VAT"
+        description: "Tax scheme identifier"
+
+  AllowanceCharge:
+    description: "Discount or surcharge applied at line or document level"
+    fields:
+      - name: "charge_indicator"
+        type: "boolean"
+        obligation: "mandatory"
+        description: "true = charge (surcharge), false = allowance (discount)"
+
+      - name: "reason_code"
+        type: "enum"
+        ref: "AllowanceChargeReason"
+        obligation: "conditional"
+        description: "Reason code for the allowance/charge"
+
+      - name: "reason_text"
+        type: "string"
+        obligation: "conditional"
+        description: "Free-text reason"
+        constraints:
+          - "Max length: 256"
+
+      - name: "amount"
+        type: "decimal"
+        obligation: "mandatory"
+        description: "Monetary amount"
+        constraints:
+          - "Precision: 2 decimal places"
+          - "Must be > 0"
+
+      - name: "base_amount"
+        type: "decimal"
+        obligation: "optional"
+        description: "Amount the percentage is calculated on (if percentage-based)"
+        constraints:
+          - "Precision: 2 decimal places"
+
+      - name: "percentage"
+        type: "decimal"
+        obligation: "optional"
+        description: "Percentage if the allowance/charge is percentage-based"
+        constraints:
+          - "0 < percentage ≤ 100"
+
+  TaxScheme:
+    description: "Tax scheme identifier"
+    fields:
+      - name: "id"
+        type: "string"
+        obligation: "mandatory"
+        description: "Tax scheme identifier code"
+        default: "VAT"
+      - name: "name"
+        type: "string"
+        obligation: "optional"
+        description: "Tax scheme name"
+        default: "Value Added Tax"

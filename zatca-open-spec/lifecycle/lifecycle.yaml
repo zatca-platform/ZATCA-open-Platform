@@ -1,0 +1,269 @@
+# ============================================================================
+# ZATCA Open Specification — Invoice Lifecycle State Machine
+# Version: 1.0.0
+# Standards: ZATCA FATOORA API V2
+# ============================================================================
+# Defines the invoice lifecycle states, transitions, and guards.
+# ============================================================================
+
+meta:
+  spec_version: "1.0.0"
+  total_states: 7
+  total_transitions: 12
+
+# ---------------------------------------------------------------------------
+# State Definitions
+# ---------------------------------------------------------------------------
+states:
+
+  - name: "Draft"
+    description: "Invoice is being created; not yet signed or submitted"
+    type: "initial"
+    phase: 1
+    allowed_actions:
+      - "Edit fields"
+      - "Validate"
+      - "Discard"
+
+  - name: "Signed"
+    description: "Invoice has been locally signed (ECDSA) and QR generated; ready for submission"
+    type: "intermediate"
+    phase: 2
+    allowed_actions:
+      - "View signed XML"
+      - "Send to ZATCA"
+      - "Discard"
+
+  - name: "PendingClearance"
+    description: "Invoice submitted for clearance (Standard invoices); awaiting ZATCA response"
+    type: "intermediate"
+    phase: 2
+    allowed_actions:
+      - "Poll status"
+      - "Resubmit"
+
+  - name: "Reported"
+    description: "Invoice submitted for reporting (Simplified invoices); ZATCA acknowledged"
+    type: "final"
+    phase: 2
+    allowed_actions:
+      - "View report"
+      - "Share with buyer"
+
+  - name: "Cleared"
+    description: "Invoice cleared by ZATCA (Standard invoices); cryptographic stamp received"
+    type: "final"
+    phase: 2
+    allowed_actions:
+      - "View clearance result"
+      - "Share stamped invoice"
+      - "Generate PIH for next invoice"
+
+  - name: "Failed"
+    description: "Invoice rejected by ZATCA or validation failure; requires correction"
+    type: "terminal"
+    phase: 2
+    allowed_actions:
+      - "View error details"
+      - "Correct and resubmit (new invoice)"
+
+  - name: "Cancelled"
+    description: "Invoice voided by seller before submission"
+    type: "terminal"
+    phase: 1
+    allowed_actions:
+      - "View cancellation details"
+
+# ---------------------------------------------------------------------------
+# Transition Definitions
+# ---------------------------------------------------------------------------
+transitions:
+
+  - id: "T01"
+    from: "Draft"
+    to: "Signed"
+    trigger: "SignInvoice"
+    phase: 2
+    description: "Seller signs the invoice locally (ECDSA + XAdES)"
+    guards:
+      - "All mandatory fields present"
+      - "Validation rules pass (severity: ERROR)"
+      - "Valid ECDSA key pair exists"
+      - "Valid ZATCA certificate exists"
+    post_actions:
+      - "Generate invoice_hash"
+      - "Generate digital_signature"
+      - "Generate XAdES envelope"
+      - "Generate QR code (Phase 2: 9 tags)"
+
+  - id: "T02"
+    from: "Signed"
+    to: "PendingClearance"
+    trigger: "SubmitForClearance"
+    phase: 2
+    description: "Submit standard invoice to ZATCA for clearance"
+    guards:
+      - "Invoice type is Standard (B2B)"
+      - "invoice_counter_value > 0"
+      - "previous_invoice_hash valid (if counter > 1)"
+      - "ZATCA certificate valid"
+    post_actions:
+      - "POST /invoices/clearance"
+      - "Log submission trace"
+      - "Increment retry count"
+
+  - id: "T03"
+    from: "Signed"
+    to: "Reported"
+    trigger: "SubmitForReporting"
+    phase: 2
+    description: "Submit simplified invoice to ZATCA for reporting"
+    guards:
+      - "Invoice type is Simplified (B2C)"
+      - "invoice_counter_value > 0"
+      - "previous_invoice_hash valid (if counter > 1)"
+    post_actions:
+      - "POST /invoices/reporting"
+      - "Log submission trace"
+
+  - id: "T04"
+    from: "PendingClearance"
+    to: "Cleared"
+    trigger: "ClearanceAccepted"
+    phase: 2
+    description: "ZATCA accepted and cleared the invoice"
+    guards:
+      - "ZATCA response status == 200"
+      - "cryptographic_stamp present in response"
+    post_actions:
+      - "Store cryptographic_stamp"
+      - "Store cleared timestamp"
+      - "Fire InvoiceCleared event"
+      - "Compute PIH for next invoice"
+
+  - id: "T05"
+    from: "PendingClearance"
+    to: "Failed"
+    trigger: "ClearanceRejected"
+    phase: 2
+    description: "ZATCA rejected the invoice clearance"
+    guards:
+      - "ZATCA response status == 4xx or 5xx"
+    post_actions:
+      - "Parse error codes from response"
+      - "Fire InvoiceFailed event"
+      - "Store error details"
+
+  - id: "T06"
+    from: "Signed"
+    to: "Failed"
+    trigger: "PreSubmissionValidationFailed"
+    phase: 2
+    description: "Invoice failed pre-submission validation"
+    guards:
+      - "Validation rules fail with ERROR severity"
+    post_actions:
+      - "Report validation errors"
+      - "Allow editing (back to Draft)"
+
+  - id: "T07"
+    from: "Draft"
+    to: "Cancelled"
+    trigger: "CancelDraft"
+    phase: 1
+    description: "Seller cancels the invoice before signing"
+    guards: []
+    post_actions:
+      - "Log cancellation"
+
+  - id: "T08"
+    from: "Signed"
+    to: "Draft"
+    trigger: "Unsign"
+    phase: 2
+    description: "Return to draft for corrections (before submission)"
+    guards:
+      - "Invoice has not been submitted"
+    post_actions:
+      - "Remove signature data"
+      - "Reset hash chain references"
+
+  - id: "T09"
+    from: "Failed"
+    to: "Draft"
+    trigger: "ResetFailed"
+    phase: 2
+    description: "Reset failed invoice to draft for correction"
+    guards:
+      - "Invoice has not been cancelled"
+    post_actions:
+      - "Clear failure details"
+      - "Reset to editable state"
+    notes:
+      - "A new invoice_number and counter_value will be assigned on re-sign"
+
+  - id: "T10"
+    from: "Draft"
+    to: "Draft"
+    trigger: "Validate"
+    phase: 1
+    description: "Re-validate without changing state"
+    post_actions:
+      - "Run all validation rules"
+      - "Report errors/warnings"
+
+  - id: "T11"
+    from: "PendingClearance"
+    to: "PendingClearance"
+    trigger: "RetryClearance"
+    phase: 2
+    description: "Retry clearance submission after transient failure"
+    guards:
+      - "Retry count < max retries"
+      - "Timeout period has elapsed"
+    post_actions:
+      - "Increment retry count"
+      - "Re-submit to clearance API"
+
+  - id: "T12"
+    from: "Reported"
+    to: "Reported"
+    trigger: "ConfirmReport"
+    phase: 2
+    description: "Confirm reporting result with ZATCA"
+    post_actions:
+      - "Verify report status from ZATCA"
+      - "Compute PIH for next invoice"
+
+# ---------------------------------------------------------------------------
+# State Machine Rules
+# ---------------------------------------------------------------------------
+machine_rules:
+  - "An invoice can only be in one state at a time"
+  - "Transitions are atomic; success or rollback"
+  - "Failed transitions must NOT partially update the invoice"
+  - "PIH chain computation occurs on: Signed → [Cleared | Reported]"
+  - "Only invoices in Draft can be edited"
+  - "Cancelled is a terminal state: no transitions out"
+  - "Failed is a terminal state for submission; only escape is to reset to Draft (new invoice)"
+
+# ---------------------------------------------------------------------------
+# Phase Matrix
+# ---------------------------------------------------------------------------
+phase_matrix:
+  phase_1:
+    description: "Generation Phase (enforced from Dec 4, 2021)"
+    available_states: ["Draft", "Signed", "Cancelled"]
+    lifecycle: |
+      Draft → Signed (local QR generation)
+      Draft → Cancelled
+
+  phase_2:
+    description: "Integration Phase (enforced from Jan 1, 2023 in waves)"
+    available_states: ["Draft", "Signed", "PendingClearance", "Reported", "Cleared", "Failed", "Cancelled"]
+    simplified_lifecycle: |
+      Draft → Signed → Reported
+    standard_lifecycle: |
+      Draft → Signed → PendingClearance → Cleared
+      Draft → Signed → PendingClearance → Failed
+      Failed → Draft (reset)
